@@ -1,0 +1,121 @@
+{
+  "common": {
+    "language": "English",
+    "loading": "Loading...",
+    "error": "Error",
+    "save": "Save",
+    "cancel": "Cancel",
+    "ok": "OK",
+    "yes": "Yes",
+    "no": "No",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "back": "Back",
+    "next": "Next",
+    "search": "Search",
+    "sipConnected": "SIP Connected",
+    "sipDisconnected": "SIP Disconnected",
+    "sipConnectionError": "Unable to connect to SIP server",
+    "accountId": "Account ID",
+    "username": "Username",
+    "server": "Server",
+    "localIpAddress": "Local IP Address",
+    "dialPad": "Dial Pad",
+    "phoneBook": "Phone Book",
+    "callHistory": "Call History"
+  },
+  "header": {
+    "producerView": "Producer",
+    "languageSelector": "Language",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "studios": {
+    "studioA": "STUDIO A",
+    "studioB": "STUDIO B",
+    "buzzTalent": "Buzz Talent",
+    "buzzProducer": "Buzz Producer",
+    "buzzingProducer": "Buzzing Producer", 
+    "fromProducer": "From Producer"
+  },
+  "calls": {
+    "line": "Line",
+    "hold": "Hold",
+    "hangup": "Hangup",
+    "onAir": "On Air",
+    "offAir": "Off Air",
+    "dial": "Dial",
+    "caller": "Caller",
+    "noCaller": "No Caller",
+    "duration": "Duration",
+    "notes": "Notes",
+    "topic": "Topic",
+    "saveNotes": "Save Notes",
+    "updateInfo": "Update Info",
+    "saveToPhoneBook": "Save to Phone Book",
+    "available": "AVAILABLE",
+    "ringing": "RINGING",
+    "active": "ACTIVE",
+    "holding": "HOLDING"
+  },
+  "dialPad": {
+    "dialpad": "Dial Pad",
+    "call": "Call",
+    "dialing": "Dialing...",
+    "phoneNumber": "Phone Number",
+    "enterPhoneNumber": "Enter phone number"
+  },
+  "chat": {
+    "communication": "Communication",
+    "talentChat": "Talent Chat",
+    "talentA": "Talent A",
+    "talentB": "Talent B",
+    "typeMessage": "Type a message...",
+    "send": "Send",
+    "clearChat": "Clear Chat",
+    "attachment": "Attachment"
+  },
+  "audioRouting": {
+    "routing": "Audio Routing",
+    "input": "Input",
+    "output": "Output",
+    "levels": "Levels",
+    "saveRouting": "Save Routing"
+  },
+  "audio": {
+    "inputLevel": "Input Level",
+    "outputLevel": "Output Level",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "volume": "Volume"
+  },
+  "sipConfig": {
+    "title": "SIP Configuration",
+    "server": "SIP Server",
+    "username": "Username",
+    "password": "Password",
+    "saveConfig": "Save Configuration",
+    "testConnection": "Test Connection",
+    "connectionSuccess": "Connection Successful",
+    "connectionFailed": "Connection Failed"
+  },
+  "networkConfig": {
+    "title": "Network Configuration",
+    "interface": "Network Interface",
+    "ipAddress": "IP Address",
+    "detectInterfaces": "Detect Interfaces",
+    "saveInterface": "Save Interface"
+  },
+  "remoteStudio": {
+    "title": "Remote Studio",
+    "communication": "Communication",
+    "chatWithProducer": "Chat with Producer", 
+    "micSettings": "Microphone Settings",
+    "audioSettings": "Audio Settings",
+    "connectionStatus": "Connection Status",
+    "connected": "Connected",
+    "connecting": "Connecting",
+    "disconnected": "Disconnected"
+  }
+}

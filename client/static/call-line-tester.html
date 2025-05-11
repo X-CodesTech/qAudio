@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Call Line Tester</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    .panel {
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    input, select, button {
+      padding: 8px;
+      font-size: 14px;
+    }
+    button {
+      background: #0066cc;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0055aa;
+    }
+    textarea {
+      width: 100%;
+      height: 100px;
+      font-family: monospace;
+      margin-top: 10px;
+    }
+    #log {
+      height: 250px;
+      overflow-y: auto;
+      background: #f0f0f0;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+    .callLine {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid #ddd;
+      margin-bottom: 10px;
+      border-radius: 4px;
+    }
+    .callLine.active {
+      background-color: rgba(0, 255, 0, 0.1);
+    }
+    .callLine.inactive {
+      background-color: rgba(128, 128, 128, 0.1);
+    }
+    .callLine.ringing {
+      background-color: rgba(255, 255, 0, 0.2);
+    }
+    .callLine span {
+      display: inline-block;
+      margin-right: 10px;
+    }
+    .callLine button {
+      padding: 5px 10px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Call Line Tester</h1>
+  
+  <div class="panel">
+    <h2>WebSocket Connection</h2>
+    <div class="controls">
+      <input type="text" id="wsUrl" value="" placeholder="WebSocket URL">
+      <button id="connectWs">Connect</button>
+      <button id="disconnectWs">Disconnect</button>
+      <span id="wsStatus">Disconnected</span>
+    </div>
+  </div>
+  
+  <div class="panel">
+    <h2>API Operations</h2>
+    <div class="controls">
+      <button id="fetchCallLines">Fetch Call Lines</button>
+      <button id="loginAsProducer">Login as Producer</button>
+    </div>
+  </div>
+  
+  <div class="panel">
+    <h2>Update Call Line</h2>
+    <div class="controls">
+      <select id="lineId">
+        <option value="1">Line 1</option>
+        <option value="2">Line 2</option>
+        <option value="3">Line 3</option>
+        <option value="4">Line 4</option>
+        <option value="5">Line 5</option>
+        <option value="6">Line 6</option>
+      </select>
+      <select id="status">
+        <option value="inactive">Inactive</option>
+        <option value="ringing">Ringing</option>
+        <option value="active">Active</option>
+        <option value="hold">Hold</option>
+        <option value="onair">On Air</option>
+      </select>
+      <input type="text" id="phoneNumber" placeholder="Phone Number">
+      <input type="text" id="contact" placeholder="Contact Name">
+      <button id="updateLine">Update Line</button>
+    </div>
+  </div>
+  
+  <div class="panel">
+    <h2>Current Call Lines</h2>
+    <div id="callLinesContainer"></div>
+  </div>
+  
+  <div class="panel">
+    <h2>Send WebSocket Message</h2>
+    <div class="controls">
+      <select id="msgType">
+        <option value="callInfoUpdate">Call Info Update</option>
+        <option value="statusUpdate">Status Update</option>
+      </select>
+      <button id="sendWsMsg">Send Message</button>
+    </div>
+    <textarea id="msgData">{
+  "type": "callInfoUpdate",
+  "lineId": 1,
+  "callerName": "Test Caller",
+  "callerNotes": "This is a test note"
+}</textarea>
+  </div>
+  
+  <div class="panel">
+    <h2>Log</h2>
+    <div id="log"></div>
+  </div>
+  
+  <script>
+    // State
+    let ws = null;
+    let authToken = null;
+    let callLines = [];
+    
+    // DOM Elements
+    const wsUrlInput = document.getElementById('wsUrl');
+    const wsStatusElem = document.getElementById('wsStatus');
+    const logElem = document.getElementById('log');
+    const callLinesContainer = document.getElementById('callLinesContainer');
+    
+    // Set default WebSocket URL
+    wsUrlInput.value = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + 
+                        window.location.host + '/ws';
+    
+    // Utility functions
+    function log(message, data = null) {
+      const timestamp = new Date().toLocaleTimeString();
+      let logMessage = `[${timestamp}] ${message}`;
+      
+      if (data) {
+        if (typeof data === 'object') {
+          logMessage += '\n' + JSON.stringify(data, null, 2);
+        } else {
+          logMessage += '\n' + data;
+        }
+      }
+      
+      logElem.innerHTML += logMessage + '\n\n';
+      logElem.scrollTop = logElem.scrollHeight;
+    }
+    
+    function updateCallLinesDisplay() {
+      callLinesContainer.innerHTML = '';
+      
+      callLines.forEach(line => {
+        const lineElem = document.createElement('div');
+        lineElem.className = `callLine ${line.status}`;
+        
+        lineElem.innerHTML = `
+          <span><strong>Line ${line.id}</strong></span>
+          <span>Status: ${line.status}</span>
+          <span>Phone: ${line.phoneNumber || 'None'}</span>
+          <span>Contact: ${line.contact || 'Unknown'}</span>
+          <button class="activateBtn" data-id="${line.id}">Activate</button>
+          <button class="hangupBtn" data-id="${line.id}">Hangup</button>
+          <button class="holdBtn" data-id="${line.id}">Hold</button>
+          <button class="airBtn" data-id="${line.id}">On Air</button>
+        `;
+        
+        callLinesContainer.appendChild(lineElem);
+      });
+      
+      // Add event listeners to the buttons
+      document.querySelectorAll('.activateBtn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const lineId = parseInt(e.target.dataset.id);
+          updateCallLine(lineId, 'active');
+        });
+      });
+      
+      document.querySelectorAll('.hangupBtn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const lineId = parseInt(e.target.dataset.id);
+          updateCallLine(lineId, 'inactive');
+        });
+      });
+      
+      document.querySelectorAll('.holdBtn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const lineId = parseInt(e.target.dataset.id);
+          updateCallLine(lineId, 'hold');
+        });
+      });
+      
+      document.querySelectorAll('.airBtn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const lineId = parseInt(e.target.dataset.id);
+          updateCallLine(lineId, 'onair');
+        });
+      });
+    }
+    
+    async function fetchCallLines() {
+      try {
+        const response = await fetch('/api/call-lines');
+        if (response.ok) {
+          callLines = await response.json();
+          log('Fetched call lines', callLines);
+          updateCallLinesDisplay();
+        } else {
+          log('Failed to fetch call lines', await response.text());
+        }
+      } catch (error) {
+        log('Error fetching call lines', error.message);
+      }
+    }
+    
+    async function updateCallLine(lineId, status, phoneNumber, contact) {
+      const data = { status };
+      
+      if (phoneNumber) data.phoneNumber = phoneNumber;
+      if (contact) data.contact = contact;
+      
+      try {
+        const response = await fetch(`/api/call-lines/${lineId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+          const updatedLine = await response.json();
+          log(`Updated line ${lineId}`, updatedLine);
+          
+          // Update the local call lines array
+          callLines = callLines.map(line => 
+            line.id === lineId ? updatedLine : line
+          );
+          
+          updateCallLinesDisplay();
+        } else {
+          log(`Failed to update line ${lineId}`, await response.text());
+        }
+      } catch (error) {
+        log(`Error updating line ${lineId}`, error.message);
+      }
+    }
+    
+    async function loginAsProducer() {
+      try {
+        const response = await fetch('/api/direct-login/producer', {
+          method: 'POST'
+        });
+        
+        if (response.ok) {
+          authToken = await response.json();
+          log('Logged in as producer', authToken);
+          
+          // If we have a WebSocket connection, close it and reconnect with auth
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.close();
+            connectWebSocket();
+          }
+        } else {
+          log('Failed to login', await response.text());
+        }
+      } catch (error) {
+        log('Error logging in', error.message);
+      }
+    }
+    
+    function connectWebSocket() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        log('WebSocket already connected');
+        return;
+      }
+      
+      const wsUrl = wsUrlInput.value;
+      log(`Connecting to WebSocket: ${wsUrl}`);
+      
+      ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        wsStatusElem.textContent = 'Connected';
+        log('WebSocket connected');
+        
+        // Send authentication if we have a token
+        if (authToken) {
+          const authMsg = {
+            type: 'auth',
+            clientId: authToken.clientId,
+            role: authToken.role,
+            timestamp: Date.now()
+          };
+          
+          ws.send(JSON.stringify(authMsg));
+          log('Sent authentication', authMsg);
+        }
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          log('Received WebSocket message', data);
+          
+          // Handle call line updates
+          if (data.type === 'call_line_update' && data.line) {
+            // Update the local call lines array
+            callLines = callLines.map(line => 
+              line.id === data.line.id ? data.line : line
+            );
+            
+            updateCallLinesDisplay();
+          }
+          // Handle initial data
+          else if (data.type === 'init' && data.data && data.data.callLines) {
+            callLines = data.data.callLines;
+            updateCallLinesDisplay();
+          }
+        } catch (error) {
+          log('Error parsing WebSocket message', error.message);
+        }
+      };
+      
+      ws.onclose = () => {
+        wsStatusElem.textContent = 'Disconnected';
+        log('WebSocket disconnected');
+        ws = null;
+      };
+      
+      ws.onerror = (error) => {
+        wsStatusElem.textContent = 'Error';
+        log('WebSocket error', error);
+      };
+    }
+    
+    function disconnectWebSocket() {
+      if (!ws) {
+        log('WebSocket not connected');
+        return;
+      }
+      
+      ws.close();
+      wsStatusElem.textContent = 'Disconnected';
+      log('WebSocket disconnected');
+    }
+    
+    function sendWebSocketMessage() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        log('WebSocket not connected');
+        return;
+      }
+      
+      try {
+        const msgData = document.getElementById('msgData').value;
+        const msgObj = JSON.parse(msgData);
+        
+        ws.send(JSON.stringify(msgObj));
+        log('Sent WebSocket message', msgObj);
+      } catch (error) {
+        log('Error sending WebSocket message', error.message);
+      }
+    }
+    
+    // Event Listeners
+    document.getElementById('connectWs').addEventListener('click', connectWebSocket);
+    document.getElementById('disconnectWs').addEventListener('click', disconnectWebSocket);
+    document.getElementById('fetchCallLines').addEventListener('click', fetchCallLines);
+    document.getElementById('loginAsProducer').addEventListener('click', loginAsProducer);
+    
+    document.getElementById('updateLine').addEventListener('click', () => {
+      const lineId = parseInt(document.getElementById('lineId').value);
+      const status = document.getElementById('status').value;
+      const phoneNumber = document.getElementById('phoneNumber').value;
+      const contact = document.getElementById('contact').value;
+      
+      updateCallLine(lineId, status, phoneNumber, contact);
+    });
+    
+    document.getElementById('sendWsMsg').addEventListener('click', sendWebSocketMessage);
+    
+    // Initialize by fetching call lines
+    fetchCallLines();
+    
+    log('Call Line Tester initialized');
+  </script>
+</body>
+</html>

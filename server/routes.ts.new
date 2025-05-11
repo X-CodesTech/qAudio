@@ -1,0 +1,182 @@
+// Insert this right before the "Special test call endpoint for international numbers"
+  
+  // Dedicated SIP make call endpoint that supports different SIP providers
+  app.post("/api/sip-make-call", async (req, res) => {
+    try {
+      console.log('SIP Make Call API: Received request', req.body);
+      
+      const { phoneNumber, lineId, username, server, password, networkInterfaceId } = req.body;
+      
+      if (!phoneNumber) {
+        return res.status(400).json({
+          success: false,
+          message: 'Missing required parameter: phoneNumber'
+        });
+      }
+      
+      if (!lineId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Missing required parameter: lineId'
+        });
+      }
+      
+      // Get SIP account details from server if not provided
+      let sipUsername = username;
+      let sipServer = server;
+      let sipPassword = password;
+      
+      if (!sipUsername || !sipServer) {
+        const sipConfigs = await storage.getSipConfigs();
+        const realSipConfig = sipConfigs.find(config => 
+          config.sipServer === "sip.illyvoip.com" || config.sipServer.includes("illyvoip")
+        );
+        
+        // Use SIP account if available, otherwise default values
+        sipUsername = sipUsername || realSipConfig?.username || "1829916853670285";
+        sipServer = sipServer || realSipConfig?.sipServer || "sip.illyvoip.com";
+        sipPassword = sipPassword || realSipConfig?.password || "NFZZH3";
+        
+        console.log(`Using SIP account for outbound call: ${sipUsername}@${sipServer}`);
+      }
+      
+      // Check if there's a specific network interface ID to use
+      let networkInterface = null;
+      
+      // If a specific network interface ID was provided, use it
+      if (networkInterfaceId) {
+        try {
+          networkInterface = await storage.getNetworkInterface(parseInt(networkInterfaceId));
+          console.log(`Using specific network interface for SIP call: ${networkInterface.name} (${networkInterface.address})`);
+        } catch (error) {
+          console.error("Failed to get assigned network interface:", error);
+        }
+      } else {
+        // Try to get the default network interface
+        try {
+          networkInterface = await storage.getDefaultNetworkInterface();
+          console.log(`Using default network interface for SIP call: ${networkInterface?.name} (${networkInterface?.address})`);
+        } catch (error) {
+          console.error("Failed to get default network interface:", error);
+        }
+      }
+      
+      // Format the phone number for international dialing if needed
+      const formattedNumber = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+      
+      // Create a unique call ID
+      const callId = `call-${Date.now()}-${lineId}`;
+      
+      // Update the line status to "ringing"
+      const lineIndex = activeCallLines.findIndex(line => line.id === parseInt(lineId));
+      
+      if (lineIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: `Call line ${lineId} not found`
+        });
+      }
+      
+      // Update the call line status to ringing
+      activeCallLines[lineIndex] = {
+        ...activeCallLines[lineIndex],
+        status: 'ringing',
+        phoneNumber: formattedNumber,
+        startTime: new Date(),
+        notes: `Call to ${formattedNumber}`,
+        levels: {
+          input: 0,
+          output: 0
+        }
+      };
+      
+      // Broadcast the call line update
+      if (wss) {
+        broadcastToClients(wss, {
+          type: 'callLineUpdate',
+          data: activeCallLines
+        });
+      }
+      
+      // Simulate a brief delay for call setup
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Update the line status to "active" after the call connects
+      activeCallLines[lineIndex] = {
+        ...activeCallLines[lineIndex],
+        status: 'active',
+        levels: {
+          input: Math.floor(Math.random() * 40) + 10, // Random level between 10-50
+          output: Math.floor(Math.random() * 40) + 10  // Random level between 10-50
+        }
+      };
+      
+      // Broadcast the updated status
+      if (wss) {
+        broadcastToClients(wss, {
+          type: 'callLineUpdate',
+          data: activeCallLines
+        });
+      }
+      
+      // Start a background process to periodically update audio levels
+      const intervalId = setInterval(() => {
+        // Check if the call is still active
+        const currentLineIndex = activeCallLines.findIndex(line => line.id === parseInt(lineId));
+        if (currentLineIndex === -1 || activeCallLines[currentLineIndex].status !== 'active') {
+          clearInterval(intervalId);
+          return;
+        }
+        
+        // Update audio levels with random variations
+        activeCallLines[currentLineIndex].levels = {
+          input: Math.floor(Math.random() * 40) + 10,
+          output: Math.floor(Math.random() * 40) + 10
+        };
+        
+        // Broadcast the level updates
+        if (wss) {
+          broadcastToClients(wss, {
+            type: 'levelUpdate',
+            data: {
+              lineId: parseInt(lineId),
+              levels: activeCallLines[currentLineIndex].levels
+            }
+          });
+        }
+      }, 300); // Update levels every 300ms
+      
+      // Handle SIP provider specific logic
+      if (sipServer === 'sip.illyvoip.com' || sipServer.includes('illyvoip')) {
+        // For illyvoip - in a real implementation, we would make an actual API call
+        console.log(`Making SIP call to ${formattedNumber} via ${sipUsername}@${sipServer} using network interface ${networkInterface?.address || 'default'}`);
+        
+        // Return success response with call details
+        return res.json({
+          success: true,
+          message: `Call initiated to ${formattedNumber} from ${sipUsername}@${sipServer}`,
+          callId: callId,
+          status: 'initiated',
+          line: activeCallLines[lineIndex]
+        });
+      } else {
+        // For other SIP providers
+        console.log(`Making SIP call to ${formattedNumber} via generic SIP provider ${sipServer} using network interface ${networkInterface?.address || 'default'}`);
+        
+        return res.json({
+          success: true,
+          message: `Call initiated to ${formattedNumber} via ${sipServer}`,
+          callId: callId,
+          status: 'initiated',
+          line: activeCallLines[lineIndex]
+        });
+      }
+    } catch (error) {
+      console.error('Error in SIP Make Call API:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error processing SIP call request',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });

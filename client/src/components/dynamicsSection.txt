@@ -1,0 +1,17 @@
+For Channel 1:
+                    {/* Dynamics Processor Buttons in Grid Layout - Centralized with increased width */}
+                    <div className="flex justify-center">
+                      <div className="grid grid-cols-3 gap-1 mx-auto" style={{ width: 'calc(100% + 50px)' }}>
+
+And at the end of Channel 1:
+                      </div>
+                    </div>
+
+For Channel 2:
+                    {/* Dynamics Processor Buttons in Grid Layout - Centralized with increased width */}
+                    <div className="flex justify-center">
+                      <div className="grid grid-cols-3 gap-1 mx-auto" style={{ width: 'calc(100% + 50px)' }}>
+
+And at the end of Channel 2:
+                      </div>
+                    </div>

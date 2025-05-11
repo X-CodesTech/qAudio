@@ -1,0 +1,100 @@
+{
+  "common": {
+    "language": "Português",
+    "loading": "Carregando...",
+    "error": "Erro",
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "ok": "OK",
+    "yes": "Sim",
+    "no": "Não",
+    "confirm": "Confirmar",
+    "delete": "Excluir",
+    "edit": "Editar",
+    "back": "Voltar",
+    "next": "Próximo",
+    "search": "Pesquisar"
+  },
+  "header": {
+    "producerView": "Produtor",
+    "languageSelector": "Idioma",
+    "settings": "Configurações",
+    "logout": "Sair"
+  },
+  "studios": {
+    "studioA": "ESTÚDIO A",
+    "studioB": "ESTÚDIO B",
+    "buzzTalent": "Avisar Talento",
+    "buzzProducer": "Avisar Produtor",
+    "buzzingProducer": "Avisando Produtor", 
+    "fromProducer": "Do Produtor"
+  },
+  "calls": {
+    "line": "Linha",
+    "hold": "Espera",
+    "hangup": "Desligar",
+    "onAir": "No Ar",
+    "offAir": "Fora do Ar",
+    "dial": "Discar",
+    "caller": "Chamador",
+    "noCaller": "Sem Chamador",
+    "duration": "Duração",
+    "notes": "Notas",
+    "topic": "Assunto",
+    "saveNotes": "Salvar Notas",
+    "updateInfo": "Atualizar Info",
+    "saveToPhoneBook": "Salvar na Agenda",
+    "available": "DISPONÍVEL",
+    "ringing": "TOCANDO",
+    "active": "ATIVO",
+    "holding": "EM ESPERA"
+  },
+  "dialPad": {
+    "dialpad": "Teclado",
+    "call": "Ligar",
+    "dialing": "Discando...",
+    "phoneNumber": "Número de Telefone",
+    "enterPhoneNumber": "Digite o número de telefone"
+  },
+  "chat": {
+    "communication": "Comunicação",
+    "talentChat": "Chat do Talento",
+    "talentA": "Talento A",
+    "talentB": "Talento B",
+    "typeMessage": "Digite uma mensagem...",
+    "send": "Enviar",
+    "clearChat": "Limpar Chat",
+    "attachment": "Anexo"
+  },
+  "audioRouting": {
+    "routing": "Roteamento de Áudio",
+    "input": "Entrada",
+    "output": "Saída",
+    "levels": "Níveis",
+    "saveRouting": "Salvar Roteamento"
+  },
+  "audio": {
+    "inputLevel": "Nível de Entrada",
+    "outputLevel": "Nível de Saída",
+    "mute": "Silenciar",
+    "unmute": "Ativar Som",
+    "volume": "Volume"
+  },
+  "sipConfig": {
+    "title": "Configuração SIP",
+    "server": "Servidor SIP",
+    "username": "Nome de Usuário",
+    "password": "Senha",
+    "saveConfig": "Salvar Configuração",
+    "testConnection": "Testar Conexão",
+    "connectionSuccess": "Conexão bem-sucedida",
+    "connectionFailed": "Falha na conexão"
+  },
+  "networkConfig": {
+    "title": "Configuração de Rede",
+    "interface": "Interface de Rede",
+    "ipAddress": "Endereço IP",
+    "detectInterfaces": "Detectar Interfaces",
+    "saveInterface": "Salvar Interface"
+  }
+}

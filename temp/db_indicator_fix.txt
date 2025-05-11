@@ -1,0 +1,19 @@
+// Fix for the first DB indicator at line ~424
+<OLD>
+                    {/* DB Indicator line - center line with more professional appearance */}
+                    <div className="absolute left-1/2 top-0 bottom-0 w-[1px] h-[calc(100%+40px)] bg-gradient-to-t from-white/5 via-white/10 to-white/5 transform -translate-x-1/2"></div>
+</OLD>
+<NEW>
+                    {/* Center line with subtle gradient */}
+                    <div className="absolute left-1/2 top-0 bottom-0 w-[1px] h-[calc(100%+40px)] bg-gradient-to-t from-white/5 via-white/10 to-white/5 transform -translate-x-1/2"></div>
+</NEW>
+
+// Fix for the second DB indicator at line ~684
+<OLD>
+                    {/* DB Indicator line - center line with more professional appearance */}
+                    <div className="absolute left-1/2 top-0 bottom-0 w-[1px] h-[calc(100%+40px)] bg-gradient-to-t from-white/5 via-white/10 to-white/5 transform -translate-x-1/2"></div>
+</OLD>
+<NEW>
+                    {/* Center line with subtle gradient */}
+                    <div className="absolute left-1/2 top-0 bottom-0 w-[1px] h-[calc(100%+40px)] bg-gradient-to-t from-white/5 via-white/10 to-white/5 transform -translate-x-1/2"></div>
+</NEW>

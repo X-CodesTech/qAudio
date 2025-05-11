@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="240" height="80" viewBox="0 0 240 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Stylized M for Mazen -->
+  <path d="M30 20 L50 20 L60 45 L70 20 L90 20 L70 60 L50 60 Z" fill="#10B981"/>
+  <!-- Stylized S for Studio -->
+  <path d="M110 20 C110 20, 130 15, 140 25 C150 35, 135 45, 125 45 C115 45, 135 55, 145 45 C155 35, 140 17, 110 20 Z" fill="#059669"/>
+  <!-- Sound wave elements -->
+  <path d="M160 25 Q170 15, 180 25 Q190 35, 200 25" stroke="#34D399" stroke-width="4" stroke-linecap="round"/>
+  <path d="M160 35 Q173 25, 186 35 Q199 45, 210 35" stroke="#34D399" stroke-width="4" stroke-linecap="round"/>
+  <path d="M160 45 Q170 35, 180 45 Q190 55, 200 45" stroke="#34D399" stroke-width="4" stroke-linecap="round"/>
+  <!-- Studio name -->
+  <text x="50" y="75" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#059669">MAZEN STUDIO</text>
+  <!-- Circular elements suggesting broadcast -->
+  <circle cx="30" cy="30" r="3" fill="#A7F3D0"/>
+  <circle cx="25" cy="40" r="2" fill="#A7F3D0"/>
+  <circle cx="35" cy="45" r="2.5" fill="#A7F3D0"/>
+  <circle cx="200" cy="25" r="3" fill="#A7F3D0"/>
+  <circle cx="205" cy="35" r="2" fill="#A7F3D0"/>
+  <circle cx="195" cy="45" r="2.5" fill="#A7F3D0"/>
+</svg>

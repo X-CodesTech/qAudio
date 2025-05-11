@@ -1,0 +1,94 @@
+1. Input & Output Processing
+	•	Support for multiple input formats: WAV, MP3, AAC, FLAC, ASIO, WASAPI, DirectSound
+	•	Multi-channel audio input/output support
+	•	Input gain and balance controls
+	•	Output gain, limiter, and true peak control
+	•	Latency compensation
+
+⸻
+
+2. Pre-Processing Tools
+	•	Declipper: Restores audio clipped during recording/mastering
+	•	Noise Reduction: Removes background hum, hiss, or static
+	•	Hum Filter: Automatic removal of 50/60 Hz hum and harmonics
+	•	Stereo Phase Correction: Fixes inverted or out-of-phase audio
+
+⸻
+
+3. Equalization & Filtering
+	•	Multiband Equalizer (10–30 bands): Parametric or graphic
+	•	High-pass / Low-pass filters
+	•	Notch filters: For removing specific frequencies (e.g. hum or interference)
+	•	Dynamic EQ: Frequency-dependent compression/expansion
+
+⸻
+
+4. Compression & Dynamics
+	•	Multiband Compressor (up to 9 bands)
+	•	AGC (Automatic Gain Control): Keeps levels consistent
+	•	Expander / Gate: Reduce low-level noise and control mic bleed
+	•	Limiter (Look-ahead, true peak, brick wall)
+	•	Upward Compressor / Downward Expander
+	•	Stereo Compressor with Mid/Side support
+
+⸻
+
+5. Loudness & Mastering Tools
+	•	Loudness normalization (EBU R128 / ITU-R BS.1770)
+	•	Psychoacoustic Enhancers (e.g. Bass, Treble Exciters)
+	•	Bass Clarity Enhancer: Tightens bass without distortion
+	•	De-esser: Reduces sibilant consonants in vocals
+	•	Final Limiter & Clipper: Controls peaks at final output stage
+
+⸻
+
+6. Stereo & Spatial Processing
+	•	Stereo Enhancer/Expander
+	•	Stereo Width Control
+	•	Mid/Side Processing
+	•	Phase Rotation & Correction
+	•	Panning and Imaging tools
+
+⸻
+
+7. FM/AM/HD Radio Processing (Broadcast specific)
+	•	FM Pre-emphasis / De-emphasis (50/75 µs)
+	•	Stereo Encoder (Pilot, MPX generation)
+	•	RDS Encoder Support
+	•	Composite Clipper
+	•	HD/DAB+ Compatible Processing Modes
+
+⸻
+
+8. Streaming & Web Audio Features
+	•	Loudness management for streaming (e.g., Spotify, YouTube)
+	•	Shoutcast/Icecast Integration
+	•	Encoder (AAC/MP3/OPUS with bitrate control)
+	•	Streaming audio preview with latency control
+
+⸻
+
+9. Visual Monitoring & Analysis
+	•	Real-time Spectrum Analyzer
+	•	Phase Scope / Goniometer
+	•	Stereo Correlation Meter
+	•	Peak / RMS / LUFS meters
+	•	Oscilloscope View
+	•	Dynamic Range Meter
+
+⸻
+
+10. Preset & Workflow Management
+	•	Factory and custom presets
+	•	A/B comparison
+	•	Undo/Redo history
+	•	Snapshot save/restore
+	•	Preset sharing/import/export
+
+⸻
+
+11. Plugin & System Integration
+	•	VST / VST3 / AU / AAX plugin support
+	•	Standalone and Plugin modes
+	•	Multicore CPU optimization
+	•	Low-latency mode for live performance

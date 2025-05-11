@@ -1,0 +1,888 @@
+import { useState, useEffect, useRef } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Label } from '@/components/ui/label';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { CallLine } from '@shared/schema';
+import { useVoIP } from '@/hooks/useVoIP';
+import Navbar from '@/components/Navbar';
+import ContentTabs from '@/components/ContentTabs';
+import { useAudioLevels } from '@/hooks/useAudioLevels';
+import AudioMeter, { AudioMetersPanel } from '@/components/AudioMeter';
+import { Paperclip, MoreVertical, Trash, FileText, X, PhoneCall } from 'lucide-react';
+import MazenStudioLogo from '@/assets/mazen_studio_logo_wide.png';
+// Remove the circular dependency 
+// import { useRole } from '@/App';
+
+type ChatMessage = {
+  id: number;
+  senderRole: 'admin' | 'producer' | 'talent';
+  receiverRole?: string;
+  receiverId: number;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  fileAttachment?: string;
+  studioId?: 'A' | 'B'; // To distinguish between Talent A and Talent B
+};
+
+export default function ProducerView() {
+  // Hardcode the role since this is the ProducerView
+  const role = 'producer';
+  const { callLines, holdCall, makeCall, hangupCall, sendToAir, takeOffAir, addNoteToCall } = useVoIP();
+  
+  // Debug: Log to verify all call lines exist
+  console.log("Available call lines:", callLines.map(line => `Line ${line.id} (Studio ${line.studio || 'unknown'})`));
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [studioAChatMessages, setStudioAChatMessages] = useState<ChatMessage[]>([]);
+  const [studioBChatMessages, setStudioBChatMessages] = useState<ChatMessage[]>([]);
+  const [activeStudio, setActiveStudio] = useState<'A' | 'B'>('A'); // Track which studio chat we're viewing
+  const [newMessage, setNewMessage] = useState('');
+  const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
+  const [talentId, setTalentId] = useState<number | null>(null);
+  const [callNotes, setCallNotes] = useState<{ [key: number]: string }>({});
+  const [callerNames, setCallerNames] = useState<{ [key: number]: string }>({});
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedLine, setSelectedLine] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const selectedLineTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Auto-clear selected line after 3 seconds
+  useEffect(() => {
+    if (selectedLine !== null) {
+      // Clear any existing timer
+      if (selectedLineTimerRef.current) {
+        clearTimeout(selectedLineTimerRef.current);
+      }
+      
+      // Set a new timer
+      selectedLineTimerRef.current = setTimeout(() => {
+        setSelectedLine(null);
+      }, 3000); // 3 seconds
+    }
+    
+    return () => {
+      if (selectedLineTimerRef.current) {
+        clearTimeout(selectedLineTimerRef.current);
+      }
+    };
+  }, [selectedLine]);
+
+  // Connect to WebSocket for real-time communication
+  useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      // Authenticate the WebSocket connection with current role
+      ws.send(JSON.stringify({
+        type: 'auth',
+        role: role
+      }));
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      
+      if (data.type === 'chatHistory') {
+        setChatMessages(data.data);
+      } else if (data.type === 'newChatMessage') {
+        setChatMessages(prev => [...prev, data.data]);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+    };
+
+    setWsConnection(ws);
+
+    return () => {
+      ws.close();
+    };
+  }, [role]);
+
+  // Fetch talent user for chat
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        // Fetch talent users
+        const response = await fetch('/api/users?role=talent');
+        const talents = await response.json();
+        
+        if (talents && talents.length > 0) {
+          setTalentId(talents[0].id);
+          
+          // Fetch chat history with talent A and talent B
+          const chatResponse = await fetch(`/api/chat/roles?role1=producer&role2=talent`);
+          if (chatResponse.ok) {
+            const messages = await chatResponse.json();
+            
+            // Separate messages for Studio A and Studio B
+            const studioAMessages = messages.filter((msg: ChatMessage) => 
+              msg.studioId === 'A' || !msg.studioId // Default old messages to A
+            );
+            
+            const studioBMessages = messages.filter((msg: ChatMessage) => 
+              msg.studioId === 'B'
+            );
+            
+            setChatMessages(messages); // Keep all messages as fallback
+            setStudioAChatMessages(studioAMessages);
+            setStudioBChatMessages(studioBMessages);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch chat data:', error);
+      }
+    }
+    
+    fetchData();
+  }, [role]);
+
+  // Handle file selection
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+
+  // Convert file to base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  const clearChat = () => {
+    if (!talentId || !wsConnection || wsConnection.readyState !== WebSocket.OPEN) return;
+    
+    // Send clear chat command via WebSocket with studio ID
+    wsConnection.send(JSON.stringify({
+      type: 'clearChat',
+      senderRole: role,
+      receiverRole: 'talent',
+      studioId: activeStudio
+    }));
+    
+    // Clear only the messages for the active studio
+    if (activeStudio === 'A') {
+      setStudioAChatMessages([]);
+    } else {
+      setStudioBChatMessages([]);
+    }
+  };
+
+  const sendMessage = async () => {
+    if ((!newMessage.trim() && !selectedFile) || !talentId) return;
+    
+    let fileAttachment = null;
+    
+    // If there's a file selected, convert it to base64
+    if (selectedFile) {
+      try {
+        fileAttachment = await fileToBase64(selectedFile);
+      } catch (error) {
+        console.error('Failed to convert file:', error);
+        return;
+      }
+    }
+    
+    // Create message with studio ID based on active tab
+    const messageData = {
+      senderRole: role as 'admin' | 'producer' | 'talent',
+      receiverRole: 'talent',
+      receiverId: talentId,
+      message: newMessage.trim() || 'File attachment',
+      relatedCallId: null,
+      fileAttachment,
+      studioId: activeStudio // Add studio ID to distinguish between Talent A and B
+    };
+    
+    // Send via API
+    fetch('/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(messageData),
+    }).catch(error => {
+      console.error('Failed to send message:', error);
+    });
+    
+    // Also send via WebSocket for immediate feedback
+    if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+      wsConnection.send(JSON.stringify({
+        type: 'chatMessage',
+        ...messageData
+      }));
+    }
+    
+    // Add message to the appropriate state arrays
+    const newChatMessage: ChatMessage = {
+      id: Date.now(), // Temporary ID until server responds
+      senderRole: role as 'admin' | 'producer' | 'talent',
+      receiverRole: 'talent',
+      receiverId: talentId,
+      message: messageData.message,
+      timestamp: new Date().toISOString(),
+      read: false,
+      fileAttachment: fileAttachment || undefined,
+      studioId: activeStudio
+    };
+    
+    if (activeStudio === 'A') {
+      setStudioAChatMessages(prev => [...prev, newChatMessage]);
+    } else {
+      setStudioBChatMessages(prev => [...prev, newChatMessage]);
+    }
+    
+    setNewMessage('');
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Update caller info via WebSocket
+  const updateCallerInfo = (lineId: number) => {
+    if (!wsConnection || wsConnection.readyState !== WebSocket.OPEN) {
+      return;
+    }
+
+    wsConnection.send(JSON.stringify({
+      type: 'callInfoUpdate',
+      lineId: lineId,
+      callerName: callerNames[lineId] || '',
+      callerNotes: callNotes[lineId] || ''
+    }));
+
+    // Also update call notes in the system
+    if (callNotes[lineId]) {
+      addNoteToCall(lineId, callNotes[lineId]);
+    }
+  };
+
+  return (
+    <>
+      {/* Navbar removed as per user request */}
+      <div className="container mx-auto py-6">
+        <header className="flex justify-center items-center mb-8">
+          <img 
+            src={MazenStudioLogo} 
+            alt="Mazen Studio Logo" 
+            className="h-10 w-auto" 
+            style={{ filter: 'drop-shadow(0px 3px 5px rgba(0, 0, 0, 0.5))' }}
+          />
+        </header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left column: Call Lines */}
+          <div className="lg:col-span-8 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Studio A */}
+              <Card className="border-t-4 border-t-zinc-700 shadow-md">
+                <CardHeader className="border-b border-zinc-700/20 bg-zinc-700">
+                  <CardTitle className="text-white font-bold">Studio A Call Lines</CardTitle>
+                  <CardDescription className="text-gray-200">Main studio call lines (IDs 1-3)</CardDescription>
+                </CardHeader>
+                <CardContent className="bg-gray-100">
+                  <div className="space-y-6">
+                    {callLines.map(line => {
+                      // Only include lines with IDs 1-3
+                      const isStudioA = line.id >= 1 && line.id <= 3;
+                      if (!isStudioA) return null;
+                      
+                      return (
+                        <CallLineManager 
+                          key={line.id} 
+                          callLine={{...line, studio: 'A'}} // Ensure studio property is set
+                          onHold={() => holdCall(line.id)}
+                          onHangup={() => hangupCall(line.id)}
+                          onAir={() => line.status === 'on-air' ? takeOffAir(line.id) : sendToAir(line.id)}
+                          onNotesChange={(notes: string) => {
+                            setCallNotes(prev => ({ ...prev, [line.id]: notes }));
+                          }}
+                          onCallerNameChange={(name: string) => {
+                            setCallerNames(prev => ({ ...prev, [line.id]: name }));
+                          }}
+                          onUpdateInfo={() => updateCallerInfo(line.id)}
+                          currentNotes={callNotes[line.id] || ''}
+                          currentCallerName={callerNames[line.id] || ''}
+                          isSelected={selectedLine === line.id}
+                          onSelectLine={() => setSelectedLine(line.id)}
+                        />
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+              
+              {/* Studio B */}
+              <Card className="border-t-4 border-t-zinc-700 shadow-md">
+                <CardHeader className="border-b border-zinc-700/20 bg-zinc-700">
+                  <CardTitle className="text-white font-bold">Studio B Call Lines</CardTitle>
+                  <CardDescription className="text-gray-200">Secondary studio call lines (IDs 4-6)</CardDescription>
+                </CardHeader>
+                <CardContent className="bg-gray-100">
+                  <div className="space-y-6">
+                    {/* Display only 3 Studio B lines (IDs 4-6) */}
+                    {callLines.map(line => {
+                      // Only include lines 4-6 for Studio B
+                      const isStudioB = line.id >= 4 && line.id <= 6;
+                      if (!isStudioB) return null;
+                      
+                      return (
+                        <CallLineManager 
+                          key={line.id} 
+                          callLine={{...line, studio: 'B'}} // Ensure studio property is set
+                          onHold={() => holdCall(line.id)}
+                          onHangup={() => hangupCall(line.id)}
+                          onAir={() => line.status === 'on-air' ? takeOffAir(line.id) : sendToAir(line.id)}
+                          onNotesChange={(notes: string) => {
+                            setCallNotes(prev => ({ ...prev, [line.id]: notes }));
+                          }}
+                          onCallerNameChange={(name: string) => {
+                            setCallerNames(prev => ({ ...prev, [line.id]: name }));
+                          }}
+                          onUpdateInfo={() => updateCallerInfo(line.id)}
+                          currentNotes={callNotes[line.id] || ''}
+                          currentCallerName={callerNames[line.id] || ''}
+                          isSelected={selectedLine === line.id}
+                          onSelectLine={() => setSelectedLine(line.id)}
+                        />
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Chat section moved to right column */}
+          </div>
+
+          {/* Right column: Dial pad, phone book, and chat with talents */}
+          <div className="lg:col-span-4 space-y-6">
+            <Card className="border-t-4 border-t-zinc-700 shadow-md overflow-hidden">
+              <CardHeader className="pb-0 border-b border-zinc-700/20 bg-zinc-700">
+                <CardTitle className="text-white font-bold">Phone Controls</CardTitle>
+                <CardDescription className="text-gray-200">Make calls and manage contacts</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ContentTabs />
+              </CardContent>
+            </Card>
+            
+            {/* Chat with Talents - moved below the dial pad */}
+            <Card className="border-t-4 border-t-zinc-700 shadow-md">
+              <CardHeader className="flex flex-row items-center justify-between border-b border-zinc-700/20 bg-zinc-700">
+                <CardTitle className="text-white font-bold">Chat with Talents</CardTitle>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={clearChat} className="text-destructive">
+                      <Trash className="mr-2 h-4 w-4" />
+                      Clear Chat
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </CardHeader>
+              <CardContent className="bg-gray-100">
+                <Tabs 
+                  defaultValue="studio-a" 
+                  className="w-full"
+                  onValueChange={(value) => setActiveStudio(value === 'studio-a' ? 'A' : 'B')}
+                >
+                  <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <TabsTrigger 
+                      value="studio-a"
+                      className="data-[state=active]:bg-primary data-[state=active]:text-white font-medium"
+                    >
+                      Talent A
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="studio-b"
+                      className="data-[state=active]:bg-primary data-[state=active]:text-white font-medium"
+                    >
+                      Talent B
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="studio-a" className="mt-0">
+                    <div className="flex flex-col h-[300px]">
+                      <ScrollArea className="flex-1 mb-4 p-4 border rounded-md bg-white">
+                        <div className="space-y-4">
+                          {(activeStudio === 'A' ? studioAChatMessages : chatMessages).map(msg => (
+                            <div 
+                              key={msg.id} 
+                              className={`flex ${msg.senderRole === role ? 'justify-end' : 'justify-start'}`}
+                            >
+                              <div 
+                                className={`max-w-[70%] p-3 rounded-lg ${
+                                  msg.senderRole === role 
+                                    ? 'bg-primary text-primary-foreground' 
+                                    : 'bg-muted'
+                                }`}
+                              >
+                                <div className="font-medium mb-1 flex items-center">
+                                  <span>{msg.senderRole === role ? 'You' : 'Talent A'}</span>
+                                  <span className="ml-2 text-xs opacity-70">
+                                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                                <div>
+                                  {msg.message}
+                                </div>
+                                {msg.fileAttachment && (
+                                  <div className="mt-2 p-2 bg-gray-200 rounded-md flex items-center text-sm">
+                                    <FileText className="h-4 w-4 mr-2" />
+                                    <a 
+                                      href={msg.fileAttachment} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="underline"
+                                    >
+                                      Attachment
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                      
+                      <div className="flex gap-3">
+                        <Input
+                          placeholder="Message Talent A..."
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              sendMessage();
+                            }
+                          }}
+                          className="flex-1"
+                        />
+                        <input 
+                          type="file" 
+                          id="file-a" 
+                          className="hidden" 
+                          ref={fileInputRef}
+                          onChange={handleFileSelect}
+                          accept="image/*, .pdf, .doc, .docx, .xls, .xlsx, .csv, .txt"
+                        />
+                        <Button 
+                          type="button" 
+                          size="icon" 
+                          variant="outline" 
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex items-center justify-center"
+                        >
+                          <Paperclip className="h-4 w-4" />
+                        </Button>
+                        <Button onClick={sendMessage} type="button">Send</Button>
+                      </div>
+                      
+                      {selectedFile && (
+                        <div className="mt-2 p-2 bg-gray-100 border rounded-md flex justify-between items-center text-sm">
+                          <div className="flex items-center">
+                            <FileText className="h-4 w-4 mr-2" />
+                            <span className="truncate max-w-[150px]">{selectedFile.name}</span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setSelectedFile(null)}
+                            className="h-6 w-6"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="studio-b" className="mt-0">
+                    <div className="flex flex-col h-[300px]">
+                      <ScrollArea className="flex-1 mb-4 p-4 border rounded-md bg-white">
+                        <div className="space-y-4">
+                          {(activeStudio === 'B' ? studioBChatMessages : chatMessages).map(msg => (
+                            <div 
+                              key={msg.id} 
+                              className={`flex ${msg.senderRole === role ? 'justify-end' : 'justify-start'}`}
+                            >
+                              <div 
+                                className={`max-w-[70%] p-3 rounded-lg ${
+                                  msg.senderRole === role 
+                                    ? 'bg-primary text-primary-foreground' 
+                                    : 'bg-muted'
+                                }`}
+                              >
+                                <div className="font-medium mb-1 flex items-center">
+                                  <span>{msg.senderRole === role ? 'You' : 'Talent B'}</span>
+                                  <span className="ml-2 text-xs opacity-70">
+                                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                                <div>
+                                  {msg.message}
+                                </div>
+                                {msg.fileAttachment && (
+                                  <div className="mt-2 p-2 bg-gray-200 rounded-md flex items-center text-sm">
+                                    <FileText className="h-4 w-4 mr-2" />
+                                    <a 
+                                      href={msg.fileAttachment} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="underline"
+                                    >
+                                      Attachment
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                      
+                      <div className="flex gap-3">
+                        <Input
+                          placeholder="Message Talent B..."
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              sendMessage();
+                            }
+                          }}
+                          className="flex-1"
+                        />
+                        <input 
+                          type="file" 
+                          id="file-b" 
+                          className="hidden" 
+                          ref={fileInputRef}
+                          onChange={handleFileSelect}
+                          accept="image/*, .pdf, .doc, .docx, .xls, .xlsx, .csv, .txt"
+                        />
+                        <Button 
+                          type="button" 
+                          size="icon" 
+                          variant="outline" 
+                          onClick={() => fileInputRef.current?.click()}
+                          className="flex items-center justify-center"
+                        >
+                          <Paperclip className="h-4 w-4" />
+                        </Button>
+                        <Button onClick={sendMessage} type="button">Send</Button>
+                      </div>
+                      
+                      {selectedFile && (
+                        <div className="mt-2 p-2 bg-gray-100 border rounded-md flex justify-between items-center text-sm">
+                          <div className="flex items-center">
+                            <FileText className="h-4 w-4 mr-2" />
+                            <span className="truncate max-w-[150px]">{selectedFile.name}</span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setSelectedFile(null)}
+                            className="h-6 w-6"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function CallLineManager({ 
+  callLine,
+  onHold,
+  onHangup,
+  onAir,
+  onNotesChange,
+  onCallerNameChange,
+  onUpdateInfo,
+  currentNotes,
+  currentCallerName,
+  isSelected = false,
+  onSelectLine
+}: { 
+  callLine: CallLine;
+  onHold: () => void;
+  onHangup: () => void;
+  onAir: () => void;
+  onNotesChange: (notes: string) => void;
+  onCallerNameChange: (name: string) => void;
+  onUpdateInfo: () => void;
+  currentNotes: string;
+  currentCallerName: string;
+  isSelected?: boolean;
+  onSelectLine?: () => void;
+}) {
+  const { makeCall } = useVoIP();
+  // Previously used compact display but now use same design for all call lines
+  const isCompact = false; // Keep all lines using the standard view
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case 'inactive': 
+        return {
+          background: 'bg-status-inactive',
+          text: 'text-gray-500',
+          animation: '',
+          badge: 'bg-gray-100 text-gray-500'
+        };
+      case 'ringing': 
+        return {
+          background: 'bg-status-ringing',
+          text: 'text-status-ringing',
+          animation: 'animate-pulse',
+          badge: 'bg-status-ringing text-white'
+        };
+      case 'active': 
+        return {
+          background: 'bg-status-active',
+          text: 'text-status-active',
+          animation: '',
+          badge: 'bg-status-active text-white'
+        };
+      case 'holding': 
+        return {
+          background: 'bg-status-holding',
+          text: 'text-status-holding',
+          animation: '',
+          badge: 'bg-status-holding text-white'
+        };
+      case 'on-air': 
+        return {
+          background: 'bg-status-onair',
+          text: 'text-status-onair',
+          animation: 'animate-on-air-blink',
+          badge: 'bg-status-onair text-white'
+        };
+      default: 
+        return {
+          background: 'bg-status-inactive',
+          text: 'text-gray-500',
+          animation: '',
+          badge: 'bg-gray-100 text-gray-500'
+        };
+    }
+  };
+
+  const statusStyle = getStatusStyle(callLine.status);
+
+  return (
+    <div 
+      className={`border rounded-lg p-4 ${
+        isSelected ? 'animate-selected-line' :
+        callLine.status === 'on-air' ? 'border-status-onair' : 
+        callLine.status === 'active' ? 'border-status-active' : 
+        callLine.status === 'holding' ? 'border-status-holding' : 
+        callLine.status === 'ringing' ? 'border-status-ringing' : 
+        'border-gray-200'
+      }`}
+      onClick={onSelectLine}
+    >
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex items-center">
+          <div className={`w-4 h-4 rounded-full mr-2 ${statusStyle.background} ${statusStyle.animation}`} />
+          <div>
+            <h3 className="font-medium">Line {callLine.id}</h3>
+            <div className={`text-xs px-2 py-0.5 mt-1 rounded-full inline-block ${statusStyle.badge}`}>
+              {callLine.status.charAt(0).toUpperCase() + callLine.status.slice(1)}
+            </div>
+          </div>
+        </div>
+        <div className={`text-sm font-medium ${statusStyle.text}`}>
+          {callLine.status === 'on-air' && (
+            <span className="ml-2 animate-on-air-blink">LIVE ON AIR</span>
+          )}
+          {callLine.status === 'holding' && (
+            <span className="ml-2 font-medium">ON HOLD</span>
+          )}
+          {callLine.status === 'active' && (
+            <span className="ml-2 font-medium">ACTIVE CALL</span>
+          )}
+          {callLine.status === 'ringing' && (
+            <span className="ml-2 font-medium animate-pulse">RINGING</span>
+          )}
+        </div>
+      </div>
+      
+      {/* Always render the full UI structure regardless of call status */}
+      {!isCompact ? (
+        <>
+          {/* Standard view for Studio A */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <Label htmlFor={`caller-name-${callLine.id}`}>Caller Name</Label>
+              <Input 
+                id={`caller-name-${callLine.id}`}
+                placeholder={callLine.status !== 'inactive' ? (callLine.contact?.name || "Unknown Caller") : "No active call"}
+                value={currentCallerName}
+                onChange={(e) => onCallerNameChange(e.target.value)}
+                disabled={callLine.status === 'inactive'}
+              />
+            </div>
+            <div>
+              <Label>Phone Number</Label>
+              <div className="h-10 px-3 py-2 border rounded-md bg-muted/50">
+                {callLine.status !== 'inactive' ? (callLine.phoneNumber || 'N/A') : 'No active call'}
+              </div>
+            </div>
+          </div>
+          
+          <div className="mb-4">
+            <Label htmlFor={`notes-${callLine.id}`}>Notes</Label>
+            <Textarea 
+              id={`notes-${callLine.id}`}
+              placeholder={callLine.status !== 'inactive' ? "Add notes about this call..." : "No active call"}
+              className="min-h-[100px]"
+              value={currentNotes}
+              onChange={(e) => onNotesChange(e.target.value)}
+              disabled={callLine.status === 'inactive'}
+            />
+          </div>
+
+          {/* Audio Meter for this line - always show but may be inactive */}
+          <div className="mb-4 border p-3 rounded-md bg-muted/10 h-24">
+            <AudioMeter lineId={callLine.id} />
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Compact view for Studio B lines */}
+          <div className="grid grid-cols-1 gap-2 mb-3">
+            <div className="flex justify-between items-center">
+              <div>
+                <Label htmlFor={`caller-name-${callLine.id}`} className="text-xs">Caller</Label>
+                <Input 
+                  id={`caller-name-${callLine.id}`}
+                  placeholder={callLine.status !== 'inactive' ? (callLine.contact?.name || "Unknown Caller") : "No active call"}
+                  value={currentCallerName}
+                  onChange={(e) => onCallerNameChange(e.target.value)}
+                  className="h-8 text-sm"
+                  disabled={callLine.status === 'inactive'}
+                />
+              </div>
+              <div className="ml-2">
+                <Label className="text-xs">Number</Label>
+                <div className="h-8 px-2 py-1 text-sm border rounded-md bg-muted/50">
+                  {callLine.status !== 'inactive' ? (callLine.phoneNumber || 'N/A') : 'No active call'}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Compact audio meter - always show */}
+          <div className="mb-3">
+            <AudioMeter lineId={callLine.id} showLabel={false} />
+          </div>
+        </>
+      )}
+      
+      {/* Button area - adapt based on call status */}
+      <div className="flex flex-wrap gap-2">
+        {callLine.status === 'inactive' ? (
+          <Button 
+            onClick={() => {
+              if (onSelectLine) onSelectLine();
+              makeCall(callLine.id);
+            }}
+            className="w-full"
+          >
+            <PhoneCall className="h-4 w-4 mr-2" />
+            Place Call
+          </Button>
+        ) : (
+          <>
+            {!isCompact && (
+              <Button variant="outline" onClick={onUpdateInfo} size="sm">
+                Update
+              </Button>
+            )}
+            
+            {callLine.status === 'holding' ? (
+              <Button 
+                variant="outline"
+                size={isCompact ? "sm" : "default"}
+                className="border-status-active text-status-active hover:bg-green-50"
+                onClick={onHold}
+              >
+                Unhold
+              </Button>
+            ) : (
+              <Button 
+                variant="outline" 
+                size={isCompact ? "sm" : "default"}
+                className="border-status-holding text-status-holding hover:bg-amber-50"
+                onClick={onHold}
+              >
+                Hold
+              </Button>
+            )}
+            
+            <Button 
+              variant="outline" 
+              size={isCompact ? "sm" : "default"}
+              className="border-red-500 text-red-500 hover:bg-red-50"
+              onClick={onHangup}
+            >
+              Hang Up
+            </Button>
+            
+            {callLine.status === 'on-air' ? (
+              <Button 
+                size={isCompact ? "sm" : "default"}
+                className="bg-status-onair hover:bg-red-700 text-white"
+                onClick={onAir}
+              >
+                Off Air
+              </Button>
+            ) : (
+              <Button 
+                size={isCompact ? "sm" : "default"}
+                className="bg-status-active hover:bg-green-700 text-white"
+                onClick={onAir}
+              >
+                To Air
+              </Button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

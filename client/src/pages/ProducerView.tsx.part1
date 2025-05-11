@@ -1,0 +1,150 @@
+import { useState, useEffect, useRef } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Label } from '@/components/ui/label';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { CallLine } from '@shared/schema';
+import { useVoIP } from '@/hooks/useVoIP';
+import Navbar from '@/components/Navbar';
+import ContentTabs from '@/components/ContentTabs';
+import { useAudioLevels } from '@/hooks/useAudioLevels';
+import AudioMeter, { AudioMetersPanel } from '@/components/AudioMeter';
+import { Paperclip, MoreVertical, Trash, FileText, X, PhoneCall } from 'lucide-react';
+import MazenStudioLogo from '@/assets/mazen_studio_logo_wide.png';
+// Remove the circular dependency 
+// import { useRole } from '@/App';
+
+type ChatMessage = {
+  id: number;
+  senderRole: 'admin' | 'producer' | 'talent';
+  receiverRole?: string;
+  receiverId: number;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  fileAttachment?: string;
+  studioId?: 'A' | 'B'; // To distinguish between Talent A and Talent B
+};
+
+export default function ProducerView() {
+  // Hardcode the role since this is the ProducerView
+  const role = 'producer';
+  const { callLines, holdCall, makeCall, hangupCall, sendToAir, takeOffAir, addNoteToCall } = useVoIP();
+  
+  // Debug: Log to verify all call lines exist
+  console.log("Available call lines:", callLines.map(line => `Line ${line.id} (Studio ${line.studio || 'unknown'})`));
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [studioAChatMessages, setStudioAChatMessages] = useState<ChatMessage[]>([]);
+  const [studioBChatMessages, setStudioBChatMessages] = useState<ChatMessage[]>([]);
+  const [activeStudio, setActiveStudio] = useState<'A' | 'B'>('A'); // Track which studio chat we're viewing
+  const [newMessage, setNewMessage] = useState('');
+  const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
+  const [talentId, setTalentId] = useState<number | null>(null);
+  const [callNotes, setCallNotes] = useState<{ [key: number]: string }>({});
+  const [callerNames, setCallerNames] = useState<{ [key: number]: string }>({});
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedLine, setSelectedLine] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const selectedLineTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Auto-clear selected line after 3 seconds
+  useEffect(() => {
+    if (selectedLine !== null) {
+      // Clear any existing timer
+      if (selectedLineTimerRef.current) {
+        clearTimeout(selectedLineTimerRef.current);
+      }
+      
+      // Set a new timer
+      selectedLineTimerRef.current = setTimeout(() => {
+        setSelectedLine(null);
+      }, 3000); // 3 seconds
+    }
+    
+    return () => {
+      if (selectedLineTimerRef.current) {
+        clearTimeout(selectedLineTimerRef.current);
+      }
+    };
+  }, [selectedLine]);
+
+  // Connect to WebSocket for real-time communication
+  useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log('WebSocket connected');
+      // Authenticate the WebSocket connection with current role
+      ws.send(JSON.stringify({
+        type: 'auth',
+        role: role
+      }));
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      
+      if (data.type === 'chatHistory') {
+        setChatMessages(data.data);
+      } else if (data.type === 'newChatMessage') {
+        setChatMessages(prev => [...prev, data.data]);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+    };
+
+    setWsConnection(ws);
+
+    return () => {
+      ws.close();
+    };
+  }, [role]);
+
+  // Fetch talent user for chat
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        // Fetch talent users
+        const response = await fetch('/api/users?role=talent');
+        const talents = await response.json();
+        
+        if (talents && talents.length > 0) {
+          setTalentId(talents[0].id);
+          
+          // Fetch chat history with talent A and talent B
+          const chatResponse = await fetch(`/api/chat/roles?role1=producer&role2=talent`);
+          if (chatResponse.ok) {
+            const messages = await chatResponse.json();
+            
+            // Separate messages for Studio A and Studio B
+            const studioAMessages = messages.filter((msg: ChatMessage) => 
+              msg.studioId === 'A' || !msg.studioId // Default old messages to A
+            );
+            
+            const studioBMessages = messages.filter((msg: ChatMessage) => 
+              msg.studioId === 'B'
+            );
+            
+            setChatMessages(messages); // Keep all messages as fallback
+            setStudioAChatMessages(studioAMessages);
+            setStudioBChatMessages(studioBMessages);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch chat data:', error);
+      }
+    }
+    
+    fetchData();

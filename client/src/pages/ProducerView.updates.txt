@@ -1,0 +1,31 @@
+We need to make the following changes:
+
+1. Find all ScrollArea components in the chat areas and change their style from:
+```jsx
+style={{ 
+  minHeight: "300px",
+  height: anyCallActive ? "auto" : "calc(96vh - 350px)",
+  maxHeight: anyCallActive ? "none" : "calc(96vh - 350px)",
+  transition: "all 0.3s ease"
+}}
+```
+
+To:
+```jsx
+style={{ 
+  height: "calc(96vh - 350px)",
+  transition: "all 0.3s ease"
+}}
+```
+
+2. These changes should be applied to all three ScrollArea components used for chat containers (Studio A, Studio B, and RE Studio).
+
+3. We've verified that the call line containers already have the correct style in place:
+```jsx
+style={{ 
+  height: "calc(96vh - 350px)", 
+  transition: "all 0.3s ease"
+}}
+```
+
+Let's make these changes in the ProducerView.tsx file at line numbers approx. 999, 1105, and 1386.

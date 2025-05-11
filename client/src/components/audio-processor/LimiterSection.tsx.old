@@ -1,0 +1,2368 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { 
+  Shield,
+  BarChart4,
+  Save,
+  RefreshCw,
+  EyeOff,
+  Zap,
+  Timer,
+  Radio,
+  Layers,
+  BarChart,
+  LineChart,
+  Activity,
+  Shuffle,
+  Wifi,
+  Settings,
+  History,
+  Check,
+  X,
+  Globe,
+  LucideIcon
+} from 'lucide-react';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Progress } from '@/components/ui/progress';
+
+interface LimiterSectionProps {
+  onSave?: () => void;
+}
+
+// Look-Ahead Limiter settings
+interface LookAheadSettings {
+  enabled: boolean;
+  threshold: number;
+  ceiling: number;
+  release: number;
+  lookAheadTime: number;
+  attack: number;
+  knee: number;
+  autoGain: boolean;
+}
+
+// Multiband Limiter settings
+interface MultibandSettings {
+  enabled: boolean;
+  bands: LimiterBand[];
+  linkBands: boolean;
+  crossoverFrequencies: number[];
+  globalCeiling: number;
+  globalThreshold: number;
+}
+
+interface LimiterBand {
+  name: string;
+  enabled: boolean;
+  threshold: number;
+  release: number;
+  range: number;
+  gain: number;
+}
+
+// True Peak Limiter settings
+interface TruePeakSettings {
+  enabled: boolean;
+  threshold: number;
+  ceiling: number;
+  release: number;
+  oversample: '1x' | '2x' | '4x' | '8x';
+  isp: boolean; // Inter-sample peak detection
+  dither: boolean;
+}
+
+// Loudness Compliance settings
+interface LoudnessSettings {
+  enabled: boolean;
+  standard: 'ebu' | 'atsc' | 'arib' | 'custom';
+  targetLUFS: number;
+  shortTermMax: number;
+  momentaryMax: number;
+  lra: number; // Loudness Range
+  maxTruePeak: number;
+  autoGain: boolean;
+  correction: 'single-pass' | 'two-pass' | 'live';
+}
+
+// Low Latency Mode settings
+interface LatencySettings {
+  mode: 'zero' | 'low' | 'normal' | 'high';
+  buffer: number;
+  quality: 'draft' | 'good' | 'best';
+  prioritizeLatency: boolean;
+}
+
+// Bypass / A-B Comparison settings
+interface BypassSettings {
+  bypass: boolean;
+  enableABComparison: boolean;
+  abSourceA: 'processed' | 'input'; 
+  abSourceB: 'processed' | 'input';
+  matchLevels: boolean;
+}
+
+// Loudness measurement/metering data
+interface LoudnessData {
+  integrated: number;
+  shortTerm: number;
+  momentary: number;
+  truePeak: number;
+  loudnessRange: number;
+  history: number[];
+  reduction: number;
+  gainReduction: number[];
+}
+
+// Standards definitions
+interface ComplianceStandard {
+  name: string;
+  icon: LucideIcon;
+  targetLUFS: number;
+  maxTruePeak: number;
+  shortTermMax: number | null;
+  momentaryMax: number | null;
+  lra: number | null;
+  description: string;
+}
+
+// Define compliance standards
+const COMPLIANCE_STANDARDS: Record<string, ComplianceStandard> = {
+  ebu: {
+    name: 'EBU R128',
+    icon: Globe,
+    targetLUFS: -23.0,
+    maxTruePeak: -1.0,
+    shortTermMax: null,
+    momentaryMax: null,
+    lra: 15,
+    description: 'European Broadcasting Union standard for broadcast audio loudness'
+  },
+  atsc: {
+    name: 'ATSC A/85',
+    icon: Radio,
+    targetLUFS: -24.0,
+    maxTruePeak: -2.0,
+    shortTermMax: null,
+    momentaryMax: null,
+    lra: null,
+    description: 'North American standard for TV broadcast loudness'
+  },
+  arib: {
+    name: 'ARIB TR-B32',
+    icon: Wifi,
+    targetLUFS: -24.0,
+    maxTruePeak: -1.0,
+    shortTermMax: null,
+    momentaryMax: null,
+    lra: null,
+    description: 'Japanese standard for broadcast loudness'
+  },
+  custom: {
+    name: 'Custom',
+    icon: Settings,
+    targetLUFS: -16.0,
+    maxTruePeak: -1.0,
+    shortTermMax: -14.0,
+    momentaryMax: -12.0,
+    lra: 8,
+    description: 'Custom settings for specific requirements'
+  }
+};
+
+// Default limiter presets
+const LIMITER_PRESETS = [
+  { id: 'mastering', name: 'Mastering', description: 'Transparent mastering limiter' },
+  { id: 'broadcast', name: 'Broadcast', description: 'EBU R128 compliant limiter' },
+  { id: 'streaming', name: 'Streaming', description: 'Optimize for online streaming' },
+  { id: 'maximum', name: 'Maximum Loudness', description: 'Aggressive limiting for maximum level' },
+  { id: 'live', name: 'Live Broadcast', description: 'Low latency for live applications' },
+  { id: 'dialogue', name: 'Dialogue', description: 'Optimized for speech content' },
+];
+
+// Default gain reduction and loudness data for visualization
+const DEFAULT_LOUDNESS_DATA: LoudnessData = {
+  integrated: -16.2,
+  shortTerm: -15.7,
+  momentary: -14.5,
+  truePeak: -0.7,
+  loudnessRange: 7.8,
+  reduction: 3.5,
+  history: Array(100).fill(0).map(() => -18 + Math.random() * 8),
+  gainReduction: Array(100).fill(0).map(() => Math.random() * 6)
+};
+
+// Crossover frequencies for multiband limiter
+const DEFAULT_CROSSOVERS = [120, 600, 2500, 8000];
+
+// Default multiband setup
+const DEFAULT_BANDS: LimiterBand[] = [
+  { name: 'Low', enabled: true, threshold: -5.0, release: 50, range: 12, gain: 0 },
+  { name: 'Low Mid', enabled: true, threshold: -4.5, release: 40, range: 10, gain: 0 },
+  { name: 'Mid', enabled: true, threshold: -4.0, release: 30, range: 8, gain: 0 },
+  { name: 'High Mid', enabled: true, threshold: -3.5, release: 20, range: 6, gain: 0 },
+  { name: 'High', enabled: true, threshold: -3.0, release: 10, range: 4, gain: 0 }
+];
+
+const LimiterSection: React.FC<LimiterSectionProps> = ({ onSave }) => {
+  // State for active tab
+  const [activeTab, setActiveTab] = useState<string>('lookahead');
+  
+  // Master enable switch
+  const [limiterEnabled, setLimiterEnabled] = useState<boolean>(true);
+  
+  // LUFS and gain reduction display
+  const [loudnessData, setLoudnessData] = useState<LoudnessData>(DEFAULT_LOUDNESS_DATA);
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  
+  // Component states
+  const [lookAheadSettings, setLookAheadSettings] = useState<LookAheadSettings>({
+    enabled: true,
+    threshold: -3.0,
+    ceiling: -0.1,
+    release: 50,
+    lookAheadTime: 5,
+    attack: 0.1,
+    knee: 3.0,
+    autoGain: true
+  });
+  
+  const [multibandSettings, setMultibandSettings] = useState<MultibandSettings>({
+    enabled: false,
+    bands: DEFAULT_BANDS,
+    linkBands: true,
+    crossoverFrequencies: DEFAULT_CROSSOVERS,
+    globalCeiling: -0.1,
+    globalThreshold: -4.0
+  });
+  
+  const [truePeakSettings, setTruePeakSettings] = useState<TruePeakSettings>({
+    enabled: true,
+    threshold: -2.0,
+    ceiling: -0.3,
+    release: 40,
+    oversample: '4x',
+    isp: true,
+    dither: true
+  });
+  
+  const [loudnessSettings, setLoudnessSettings] = useState<LoudnessSettings>({
+    enabled: true,
+    standard: 'ebu',
+    targetLUFS: -23.0,
+    shortTermMax: -18.0,
+    momentaryMax: -15.0,
+    lra: 15,
+    maxTruePeak: -1.0,
+    autoGain: true,
+    correction: 'live'
+  });
+  
+  const [latencySettings, setLatencySettings] = useState<LatencySettings>({
+    mode: 'normal',
+    buffer: 1024,
+    quality: 'good',
+    prioritizeLatency: false
+  });
+  
+  const [bypassSettings, setBypassSettings] = useState<BypassSettings>({
+    bypass: false,
+    enableABComparison: false,
+    abSourceA: 'processed',
+    abSourceB: 'input',
+    matchLevels: true
+  });
+  
+  // Canvas references for visualizations
+  const gainReductionCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const loudnessCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const spectrumCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  
+  // Animation frame reference for continuous updates
+  const requestAnimationRef = useRef<number | null>(null);
+  
+  // Handler for look-ahead settings changes
+  const handleLookAheadChange = (property: keyof LookAheadSettings, value: number | boolean) => {
+    setLookAheadSettings(prev => ({
+      ...prev,
+      [property]: value
+    }));
+    
+    // If threshold changes and bands are linked, update multiband thresholds too
+    if (property === 'threshold' && multibandSettings.linkBands && typeof value === 'number') {
+      handleMultibandChange('globalThreshold', value);
+    }
+    
+    // If ceiling changes and we use true peak limiting, sync that too
+    if (property === 'ceiling' && truePeakSettings.enabled && typeof value === 'number') {
+      handleTruePeakChange('ceiling', value);
+    }
+  };
+  
+  // Handle look-ahead slider changes
+  const handleLookAheadSliderChange = (property: keyof LookAheadSettings, values: number[]) => {
+    if (values.length > 0) {
+      handleLookAheadChange(property, values[0]);
+    }
+  };
+  
+  // Handler for multiband settings changes
+  const handleMultibandChange = (property: keyof MultibandSettings, value: any) => {
+    if (property === 'globalThreshold' && typeof value === 'number') {
+      // Update all band thresholds when global threshold changes
+      setMultibandSettings(prev => {
+        const updatedBands = prev.bands.map((band, idx) => {
+          // Apply graduated thresholds (slightly different for each band)
+          const offset = (idx - 2) * 0.5; // -1.0 for low, -0.5, 0, +0.5, +1.0 for high
+          return {
+            ...band,
+            threshold: value + offset
+          };
+        });
+        
+        return {
+          ...prev,
+          [property]: value,
+          bands: updatedBands
+        };
+      });
+    } else {
+      setMultibandSettings(prev => ({
+        ...prev,
+        [property]: value
+      }));
+    }
+  };
+  
+  // Handler for individual band changes
+  const handleBandChange = (bandIndex: number, property: keyof LimiterBand, value: number | boolean) => {
+    setMultibandSettings(prev => {
+      const updatedBands = [...prev.bands];
+      updatedBands[bandIndex] = {
+        ...updatedBands[bandIndex],
+        [property]: value
+      };
+      return {
+        ...prev,
+        bands: updatedBands
+      };
+    });
+  };
+  
+  // Handler for crossover frequency changes
+  const handleCrossoverChange = (index: number, value: number) => {
+    setMultibandSettings(prev => {
+      const updatedCrossovers = [...prev.crossoverFrequencies];
+      updatedCrossovers[index] = value;
+      // Sort to ensure they're in ascending order
+      updatedCrossovers.sort((a, b) => a - b);
+      return {
+        ...prev,
+        crossoverFrequencies: updatedCrossovers
+      };
+    });
+  };
+  
+  // Handler for true peak settings changes
+  const handleTruePeakChange = (property: keyof TruePeakSettings, value: any) => {
+    setTruePeakSettings(prev => ({
+      ...prev,
+      [property]: value
+    }));
+    
+    // If threshold changes and look-ahead limiter is enabled, sync that too
+    if (property === 'threshold' && lookAheadSettings.enabled && typeof value === 'number') {
+      handleLookAheadChange('threshold', value);
+    }
+  };
+  
+  // Handle true peak slider changes
+  const handleTruePeakSliderChange = (property: keyof TruePeakSettings, values: number[]) => {
+    if (values.length > 0) {
+      handleTruePeakChange(property, values[0]);
+    }
+  };
+  
+  // Handler for loudness compliance settings changes
+  const handleLoudnessChange = (property: keyof LoudnessSettings, value: any) => {
+    setLoudnessSettings(prev => ({
+      ...prev,
+      [property]: value
+    }));
+    
+    // If standard changes, update related settings
+    if (property === 'standard' && value !== 'custom') {
+      const standard = COMPLIANCE_STANDARDS[value];
+      
+      setLoudnessSettings(prev => ({
+        ...prev,
+        targetLUFS: standard.targetLUFS,
+        maxTruePeak: standard.maxTruePeak,
+        shortTermMax: standard.shortTermMax || prev.shortTermMax,
+        momentaryMax: standard.momentaryMax || prev.momentaryMax,
+        lra: standard.lra || prev.lra
+      }));
+      
+      // Also update true peak limiter to match standard
+      if (truePeakSettings.enabled) {
+        handleTruePeakChange('threshold', standard.maxTruePeak - 0.1);
+        handleTruePeakChange('ceiling', standard.maxTruePeak);
+      }
+    }
+  };
+  
+  // Handle loudness slider changes
+  const handleLoudnessSliderChange = (property: keyof LoudnessSettings, values: number[]) => {
+    if (values.length > 0) {
+      handleLoudnessChange(property, values[0]);
+      
+      // If we're adjusting a setting manually, switch to custom standard
+      if (property !== 'standard' && property !== 'autoGain' && property !== 'correction') {
+        handleLoudnessChange('standard', 'custom');
+      }
+    }
+  };
+  
+  // Handler for latency settings changes
+  const handleLatencyChange = (property: keyof LatencySettings, value: any) => {
+    setLatencySettings(prev => ({
+      ...prev,
+      [property]: value
+    }));
+    
+    // Adjust buffer size based on mode
+    if (property === 'mode') {
+      const bufferSizes: Record<string, number> = {
+        'zero': 128,
+        'low': 256,
+        'normal': 1024,
+        'high': 4096
+      };
+      
+      setLatencySettings(prev => ({
+        ...prev,
+        buffer: bufferSizes[value as string] || 1024
+      }));
+    }
+  };
+  
+  // Handler for bypass settings changes
+  const handleBypassChange = (property: keyof BypassSettings, value: any) => {
+    setBypassSettings(prev => ({
+      ...prev,
+      [property]: value
+    }));
+  };
+  
+  // Toggle A/B comparison
+  const toggleABComparison = () => {
+    setBypassSettings(prev => ({
+      ...prev,
+      enableABComparison: !prev.enableABComparison
+    }));
+  };
+  
+  // Toggle master bypass
+  const toggleBypass = () => {
+    setBypassSettings(prev => ({
+      ...prev,
+      bypass: !prev.bypass
+    }));
+  };
+  
+  // Toggle playback for simulation
+  const togglePlayback = () => {
+    setIsPlaying(!isPlaying);
+    
+    if (!isPlaying) {
+      // Start analysis
+      setIsAnalyzing(true);
+      // In a real app, this would trigger actual audio analysis
+    } else {
+      // Stop analysis
+      setIsAnalyzing(false);
+    }
+  };
+  
+  // Reset all settings to default
+  const resetSettings = () => {
+    if (window.confirm('Reset all limiter settings to default?')) {
+      setLookAheadSettings({
+        enabled: true,
+        threshold: -3.0,
+        ceiling: -0.1,
+        release: 50,
+        lookAheadTime: 5,
+        attack: 0.1,
+        knee: 3.0,
+        autoGain: true
+      });
+      
+      setMultibandSettings({
+        enabled: false,
+        bands: DEFAULT_BANDS,
+        linkBands: true,
+        crossoverFrequencies: DEFAULT_CROSSOVERS,
+        globalCeiling: -0.1,
+        globalThreshold: -4.0
+      });
+      
+      setTruePeakSettings({
+        enabled: true,
+        threshold: -2.0,
+        ceiling: -0.3,
+        release: 40,
+        oversample: '4x',
+        isp: true,
+        dither: true
+      });
+      
+      setLoudnessSettings({
+        enabled: true,
+        standard: 'ebu',
+        targetLUFS: -23.0,
+        shortTermMax: -18.0,
+        momentaryMax: -15.0,
+        lra: 15,
+        maxTruePeak: -1.0,
+        autoGain: true,
+        correction: 'live'
+      });
+      
+      setLatencySettings({
+        mode: 'normal',
+        buffer: 1024,
+        quality: 'good',
+        prioritizeLatency: false
+      });
+      
+      setBypassSettings({
+        bypass: false,
+        enableABComparison: false,
+        abSourceA: 'processed',
+        abSourceB: 'input',
+        matchLevels: true
+      });
+    }
+  };
+  
+  // Load preset for limiter
+  const loadLimiterPreset = (presetId: string) => {
+    switch (presetId) {
+      case 'mastering':
+        setLookAheadSettings(prev => ({
+          ...prev,
+          threshold: -1.5,
+          ceiling: -0.1,
+          release: 40,
+          lookAheadTime: 8,
+          knee: 4.0
+        }));
+        setTruePeakSettings(prev => ({
+          ...prev,
+          enabled: true,
+          threshold: -1.7,
+          ceiling: -0.2,
+          oversample: '8x'
+        }));
+        setLoudnessSettings(prev => ({
+          ...prev,
+          standard: 'custom',
+          targetLUFS: -14.0,
+          maxTruePeak: -0.2
+        }));
+        setMultibandSettings(prev => ({
+          ...prev,
+          enabled: false
+        }));
+        break;
+        
+      case 'broadcast':
+        setLookAheadSettings(prev => ({
+          ...prev,
+          threshold: -3.0,
+          ceiling: -1.0,
+          release: 60,
+          lookAheadTime: 6
+        }));
+        setTruePeakSettings(prev => ({
+          ...prev,
+          enabled: true,
+          threshold: -3.2,
+          ceiling: -1.0,
+          oversample: '4x'
+        }));
+        setLoudnessSettings(prev => ({
+          ...prev,
+          standard: 'ebu',
+          targetLUFS: -23.0,
+          maxTruePeak: -1.0
+        }));
+        break;
+        
+      case 'streaming':
+        setLookAheadSettings(prev => ({
+          ...prev,
+          threshold: -2.0,
+          ceiling: -0.1,
+          release: 50,
+          lookAheadTime: 6
+        }));
+        setTruePeakSettings(prev => ({
+          ...prev,
+          enabled: true,
+          threshold: -2.2,
+          ceiling: -0.2,
+          oversample: '4x'
+        }));
+        setLoudnessSettings(prev => ({
+          ...prev,
+          standard: 'custom',
+          targetLUFS: -16.0,
+          maxTruePeak: -0.2
+        }));
+        break;
+        
+      case 'maximum':
+        setLookAheadSettings(prev => ({
+          ...prev,
+          threshold: -0.8,
+          ceiling: -0.1,
+          release: 30,
+          lookAheadTime: 4,
+          knee: 2.0
+        }));
+        setTruePeakSettings(prev => ({
+          ...prev,
+          threshold: -1.0,
+          ceiling: -0.1,
+          release: 20
+        }));
+        setMultibandSettings(prev => ({
+          ...prev,
+          enabled: true,
+          globalThreshold: -1.0,
+          globalCeiling: -0.1
+        }));
+        break;
+        
+      case 'live':
+        setLookAheadSettings(prev => ({
+          ...prev,
+          threshold: -3.0,
+          ceiling: -0.5,
+          release: 40,
+          lookAheadTime: 2
+        }));
+        setTruePeakSettings(prev => ({
+          ...prev,
+          threshold: -3.5,
+          ceiling: -0.5,
+          oversample: '2x'
+        }));
+        setLatencySettings(prev => ({
+          ...prev,
+          mode: 'low',
+          prioritizeLatency: true,
+          buffer: 256
+        }));
+        break;
+        
+      case 'dialogue':
+        setLookAheadSettings(prev => ({
+          ...prev,
+          threshold: -6.0,
+          ceiling: -1.0,
+          release: 80,
+          lookAheadTime: 5,
+          knee: 6.0
+        }));
+        setTruePeakSettings(prev => ({
+          ...prev,
+          threshold: -7.0,
+          ceiling: -1.0
+        }));
+        setLoudnessSettings(prev => ({
+          ...prev,
+          standard: 'custom',
+          targetLUFS: -18.0,
+          maxTruePeak: -1.0,
+          lra: 10
+        }));
+        break;
+    }
+  };
+  
+  // Draw gain reduction meter
+  const drawGainReduction = () => {
+    const canvas = gainReductionCanvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Set canvas size to match display size
+    canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+    canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw background
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    const width = canvas.offsetWidth;
+    const height = canvas.offsetHeight;
+    
+    // Draw scale divisions for dB
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    
+    const dbLevels = [0, -1, -3, -6, -9, -12, -15, -18, -24];
+    const maxDb = 24; // Maximum dB representation
+    
+    dbLevels.forEach(level => {
+      const x = width * (1 - Math.abs(level) / maxDb);
+      
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+      
+      // Labels
+      ctx.fillStyle = '#666';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${level}`, x, height - 5);
+    });
+    
+    // Draw gain reduction history
+    if (loudnessData.gainReduction.length > 0) {
+      // Calculate current gain reduction
+      let currentReduction = 0;
+      
+      // Determine which limiter is active for visualization
+      if (lookAheadSettings.enabled) {
+        // Simulate gain reduction based on threshold and input level
+        const inputLevel = -loudnessData.momentary - 2; // Estimate input level
+        currentReduction = Math.max(0, inputLevel - lookAheadSettings.threshold);
+      }
+      
+      if (multibandSettings.enabled) {
+        // For multiband, take max reduction across bands (simplified)
+        currentReduction = Math.max(currentReduction, multibandSettings.bands.reduce((max, band) => {
+          if (!band.enabled) return max;
+          // Simulate band-specific reduction
+          const bandReduction = Math.random() * 6 * (band.name === 'Low' ? 1.5 : 1.0);
+          return Math.max(max, bandReduction);
+        }, 0));
+      }
+      
+      if (truePeakSettings.enabled) {
+        // Simulate true peak limiting
+        const truePeakReduction = Math.max(0, loudnessData.truePeak - truePeakSettings.threshold) * 1.5;
+        currentReduction = Math.max(currentReduction, truePeakReduction);
+      }
+      
+      // Update visualization data with new gain reduction
+      const newGainReduction = [...loudnessData.gainReduction.slice(1), currentReduction];
+      
+      // Update loudness data
+      setLoudnessData(prev => ({
+        ...prev,
+        gainReduction: newGainReduction,
+        reduction: currentReduction
+      }));
+      
+      // Bar representation - gradient
+      const barHeight = 40;
+      const barTop = (height - barHeight) / 2;
+      
+      // Create gradient
+      const gradient = ctx.createLinearGradient(0, 0, width, 0);
+      gradient.addColorStop(0, '#f00');
+      gradient.addColorStop(0.4, '#f80');
+      gradient.addColorStop(0.7, '#fd0');
+      gradient.addColorStop(1, '#0f8');
+      
+      // Draw full background scale
+      ctx.fillStyle = '#2a2a2a';
+      ctx.fillRect(0, barTop, width, barHeight);
+      
+      // Calculate meter position based on current reduction
+      const meterWidth = width * (1 - Math.min(1, currentReduction / maxDb));
+      
+      // Fill active part
+      ctx.fillStyle = gradient;
+      ctx.fillRect(meterWidth, barTop, width - meterWidth, barHeight);
+      
+      // Draw border
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0, barTop, width, barHeight);
+      
+      // Draw historical graph at the bottom
+      const graphHeight = 60;
+      const graphTop = height - graphHeight - 20;
+      
+      ctx.fillStyle = '#222';
+      ctx.fillRect(0, graphTop, width, graphHeight);
+      
+      // Draw reduction history
+      const reductionData = loudnessData.gainReduction;
+      const step = width / reductionData.length;
+      
+      // Draw filled graph
+      ctx.fillStyle = 'rgba(255, 80, 30, 0.3)';
+      ctx.beginPath();
+      ctx.moveTo(0, graphTop + graphHeight);
+      
+      reductionData.forEach((db, index) => {
+        const x = index * step;
+        const y = graphTop + graphHeight * (1 - Math.min(1, db / maxDb));
+        ctx.lineTo(x, y);
+      });
+      
+      ctx.lineTo((reductionData.length - 1) * step, graphTop + graphHeight);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Draw line
+      ctx.strokeStyle = 'rgba(255, 80, 30, 0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      
+      reductionData.forEach((db, index) => {
+        const x = index * step;
+        const y = graphTop + graphHeight * (1 - Math.min(1, db / maxDb));
+        
+        if (index === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+      
+      ctx.stroke();
+      
+      // Draw border around history graph
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0, graphTop, width, graphHeight);
+      
+      // Draw numerical value
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`-${currentReduction.toFixed(1)} dB`, 10, barTop + barHeight / 2 + 6);
+      
+      // Label
+      ctx.fillStyle = '#888';
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText('Gain Reduction', width - 10, barTop + barHeight / 2 + 6);
+    }
+  };
+  
+  // Draw loudness meter
+  const drawLoudnessMeter = () => {
+    const canvas = loudnessCanvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Set canvas size to match display size
+    canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+    canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw background
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    const width = canvas.offsetWidth;
+    const height = canvas.offsetHeight;
+    
+    // Draw LUFS scales
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    
+    // Loudness range to display
+    const minLUFS = -36;
+    const maxLUFS = 0;
+    const lufsRange = Math.abs(maxLUFS - minLUFS);
+    
+    // Draw horizontal scale lines
+    const lufsLevels = [-36, -33, -30, -27, -24, -21, -18, -15, -12, -9, -6, -3, 0];
+    
+    lufsLevels.forEach(level => {
+      const y = height * (1 - (level - minLUFS) / lufsRange);
+      
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+      
+      // Labels
+      ctx.fillStyle = '#666';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${level}`, 5, y - 2);
+    });
+    
+    // Draw target LUFS line
+    const targetY = height * (1 - (loudnessSettings.targetLUFS - minLUFS) / lufsRange);
+    
+    ctx.strokeStyle = 'rgba(0, 255, 200, 0.5)';
+    ctx.setLineDash([5, 3]);
+    ctx.beginPath();
+    ctx.moveTo(0, targetY);
+    ctx.lineTo(width, targetY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    // Label for target
+    ctx.fillStyle = 'rgba(0, 255, 200, 0.8)';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`Target: ${loudnessSettings.targetLUFS} LUFS`, width - 10, targetY - 5);
+    
+    // Draw true peak threshold
+    const peakThresholdY = height * (1 - (loudnessSettings.maxTruePeak - minLUFS) / lufsRange);
+    
+    ctx.strokeStyle = 'rgba(255, 100, 100, 0.5)';
+    ctx.setLineDash([3, 2]);
+    ctx.beginPath();
+    ctx.moveTo(0, peakThresholdY);
+    ctx.lineTo(width, peakThresholdY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    // Label for true peak
+    ctx.fillStyle = 'rgba(255, 100, 100, 0.8)';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`True Peak: ${loudnessSettings.maxTruePeak} dB`, width - 10, peakThresholdY - 5);
+    
+    // Draw loudness history
+    if (loudnessData.history.length > 0) {
+      const step = width / loudnessData.history.length;
+      
+      // Draw short-term loudness (blue line)
+      ctx.strokeStyle = 'rgba(30, 144, 255, 0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      
+      loudnessData.history.forEach((lufs, index) => {
+        const x = index * step;
+        const y = height * (1 - (lufs - minLUFS) / lufsRange);
+        
+        if (index === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+      
+      ctx.stroke();
+      
+      // Draw integrated loudness as a horizontal line
+      const integratedY = height * (1 - (loudnessData.integrated - minLUFS) / lufsRange);
+      
+      ctx.strokeStyle = 'rgba(255, 200, 30, 0.8)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, integratedY);
+      ctx.lineTo(width, integratedY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      
+      // Label for integrated
+      ctx.fillStyle = 'rgba(255, 200, 30, 0.8)';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`Integrated: ${loudnessData.integrated.toFixed(1)} LUFS`, 10, integratedY - 5);
+      
+      // Draw momentary loudness indicator on the right side
+      const momentaryY = height * (1 - (loudnessData.momentary - minLUFS) / lufsRange);
+      const barWidth = 20;
+      
+      ctx.fillStyle = 'rgba(50, 205, 50, 0.7)';
+      ctx.fillRect(width - barWidth - 10, momentaryY, barWidth, height - momentaryY);
+      
+      // Label for momentary
+      ctx.fillStyle = 'rgba(50, 205, 50, 0.9)';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(`M: ${loudnessData.momentary.toFixed(1)}`, width - barWidth - 15, momentaryY - 5);
+      
+      // Draw short-term indicator on the right side
+      const shortTermY = height * (1 - (loudnessData.shortTerm - minLUFS) / lufsRange);
+      
+      ctx.fillStyle = 'rgba(30, 144, 255, 0.7)';
+      ctx.fillRect(width - barWidth * 2 - 15, shortTermY, barWidth, height - shortTermY);
+      
+      // Label for short-term
+      ctx.fillStyle = 'rgba(30, 144, 255, 0.9)';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(`S: ${loudnessData.shortTerm.toFixed(1)}`, width - barWidth * 2 - 20, shortTermY - 5);
+      
+      // Add compliance indicator
+      const standard = COMPLIANCE_STANDARDS[loudnessSettings.standard];
+      let compliant = true;
+      
+      if (loudnessData.integrated > standard.targetLUFS + 1 || 
+          loudnessData.integrated < standard.targetLUFS - 1) {
+        compliant = false;
+      }
+      
+      if (loudnessData.truePeak > standard.maxTruePeak) {
+        compliant = false;
+      }
+      
+      if (standard.lra !== null && loudnessData.loudnessRange > standard.lra) {
+        compliant = false;
+      }
+      
+      ctx.fillStyle = compliant ? 'rgba(100, 255, 100, 0.9)' : 'rgba(255, 100, 100, 0.9)';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${standard.name}: ${compliant ? 'Compliant' : 'Non-Compliant'}`, 10, 20);
+    }
+  };
+  
+  // Draw spectrum/frequency response
+  const drawSpectrum = () => {
+    const canvas = spectrumCanvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Set canvas size to match display size
+    canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+    canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw background
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    const width = canvas.offsetWidth;
+    const height = canvas.offsetHeight;
+    
+    // Constants for log scale
+    const minLog = Math.log10(20);
+    const maxLog = Math.log10(20000);
+    
+    // Draw frequency scale (logarithmic)
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    
+    // Draw frequency labels and grid
+    const freqLabels = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+    
+    // Helper function to convert frequency to x position
+    const freqToX = (freq: number) => {
+      const logPos = (Math.log10(freq) - minLog) / (maxLog - minLog);
+      return Math.floor(logPos * width);
+    };
+    
+    freqLabels.forEach(freq => {
+      const x = freqToX(freq);
+      
+      // Draw vertical grid line
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height - 30); // Leave space for labels
+      ctx.stroke();
+      
+      // Draw frequency label
+      ctx.fillStyle = '#666';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(freq >= 1000 ? `${freq/1000}k` : `${freq}`, x, height - 15);
+    });
+    
+    // Draw dB scale on left side
+    ctx.fillStyle = '#333';
+    ctx.fillRect(0, 0, 30, height - 30);
+    
+    // dB markers
+    const dbLabels = [0, -3, -6, -12, -18, -24, -36, -48];
+    const dbRange = 48;
+    
+    dbLabels.forEach(db => {
+      const y = ((Math.abs(db) / dbRange) * (height - 30));
+      
+      // Draw horizontal grid line
+      ctx.beginPath();
+      ctx.moveTo(30, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+      
+      // Draw dB label
+      ctx.fillStyle = '#666';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${db}`, 25, y + 3);
+    });
+    
+    // Draw multiband crossover points if enabled
+    if (multibandSettings.enabled) {
+      // Draw crossover frequencies as vertical lines
+      ctx.strokeStyle = 'rgba(255, 150, 0, 0.6)';
+      ctx.lineWidth = 2;
+      
+      multibandSettings.crossoverFrequencies.forEach(freq => {
+        const x = freqToX(freq);
+        
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height - 30);
+        ctx.stroke();
+        
+        // Label
+        ctx.fillStyle = 'rgba(255, 150, 0, 0.8)';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${freq}Hz`, x, 15);
+      });
+      
+      // Draw frequency bands with colors
+      const bandColors = [
+        'rgba(255, 50, 50, 0.2)',   // Low
+        'rgba(255, 150, 50, 0.2)',  // Low-Mid
+        'rgba(255, 255, 50, 0.2)',  // Mid
+        'rgba(50, 200, 50, 0.2)',   // High-Mid
+        'rgba(50, 100, 255, 0.2)'   // High
+      ];
+      
+      // Get all band boundaries including edges
+      const boundaries = [20, ...multibandSettings.crossoverFrequencies, 20000];
+      
+      // Fill each band with its color
+      for (let i = 0; i < boundaries.length - 1; i++) {
+        const startX = freqToX(boundaries[i]);
+        const endX = freqToX(boundaries[i + 1]);
+        
+        // Skip disabled bands
+        if (!multibandSettings.bands[i]?.enabled) continue;
+        
+        ctx.fillStyle = bandColors[i] || 'rgba(150, 150, 150, 0.2)';
+        ctx.fillRect(startX, 0, endX - startX, height - 30);
+        
+        // Band label
+        ctx.fillStyle = bandColors[i].replace('0.2', '0.8') || 'rgba(150, 150, 150, 0.8)';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(multibandSettings.bands[i]?.name || `Band ${i+1}`, (startX + endX) / 2, height - 35);
+      }
+    }
+    
+    // Draw frequency response curve - simulated based on settings
+    if (isPlaying || isAnalyzing) {
+      // Create simulated frequency response curve
+      const points: { x: number; y: number; }[] = [];
+      
+      // Generate frequency points (logarithmic spacing)
+      for (let i = 0; i <= 100; i++) {
+        const t = i / 100;
+        const freq = Math.pow(10, minLog + t * (maxLog - minLog));
+        const x = freqToX(freq);
+        
+        // Calculate response at this frequency
+        let response = 0;
+        
+        if (multibandSettings.enabled) {
+          // Find which band this frequency belongs to
+          const boundaries = [20, ...multibandSettings.crossoverFrequencies, 20000];
+          for (let b = 0; b < boundaries.length - 1; b++) {
+            if (freq >= boundaries[b] && freq < boundaries[b + 1]) {
+              // Apply band-specific response
+              const band = multibandSettings.bands[b];
+              if (band && band.enabled) {
+                // Simulate gain reduction based on frequency
+                const bandResponse = -band.range * (1 - Math.exp(-Math.max(0, loudnessData.reduction - 3) / 10));
+                response = bandResponse;
+              }
+              break;
+            }
+          }
+        } else if (lookAheadSettings.enabled) {
+          // Broadband limiting - simulate simple gain reduction
+          response = -Math.max(0, loudnessData.reduction);
+        }
+        
+        // Add some randomness for a more "live" visualization
+        response += (Math.random() * 1.5 - 0.75);
+        
+        // Convert to y position (dB scale)
+        const y = (Math.abs(response) / dbRange) * (height - 30);
+        points.push({ x, y });
+      }
+      
+      // Draw the curve
+      ctx.strokeStyle = 'rgba(100, 200, 255, 0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      
+      points.forEach((point, index) => {
+        if (index === 0) {
+          ctx.moveTo(point.x, point.y);
+        } else {
+          ctx.lineTo(point.x, point.y);
+        }
+      });
+      
+      ctx.stroke();
+      
+      // Fill area under the curve
+      ctx.fillStyle = 'rgba(100, 200, 255, 0.1)';
+      ctx.beginPath();
+      
+      ctx.moveTo(points[0].x, height - 30);
+      points.forEach(point => {
+        ctx.lineTo(point.x, point.y);
+      });
+      ctx.lineTo(points[points.length - 1].x, height - 30);
+      
+      ctx.closePath();
+      ctx.fill();
+    }
+    
+    // Constants for log scale
+    const minLog = Math.log10(20);
+    const maxLog = Math.log10(20000);
+  };
+  
+  // Update all visualizations in animation frame
+  const updateVisualizations = () => {
+    drawGainReduction();
+    drawLoudnessMeter();
+    drawSpectrum();
+    
+    // Simulate changing loudness and gain reduction data if playback is active
+    if (isPlaying) {
+      // Update short-term and momentary levels with some randomness
+      const newMomentary = loudnessData.momentary + (Math.random() * 1.5 - 0.75);
+      const newShortTerm = loudnessData.shortTerm + (Math.random() * 0.8 - 0.4);
+      
+      // Slowly converge integrated towards target if auto gain is on
+      let newIntegrated = loudnessData.integrated;
+      if (loudnessSettings.autoGain) {
+        const targetDiff = loudnessSettings.targetLUFS - loudnessData.integrated;
+        newIntegrated += targetDiff * 0.005;
+      } else {
+        // Small random walk for integrated
+        newIntegrated += (Math.random() * 0.1 - 0.05);
+      }
+      
+      // Update true peak with some randomness
+      let newTruePeak = loudnessData.truePeak + (Math.random() * 0.4 - 0.2);
+      
+      // Ensure true peak stays within limits if limiting is active
+      if (truePeakSettings.enabled) {
+        newTruePeak = Math.min(newTruePeak, truePeakSettings.ceiling);
+      }
+      
+      // Update history by shifting and adding new point
+      const newHistory = [...loudnessData.history.slice(1)];
+      newHistory.push(newMomentary);
+      
+      // Update the loudness data
+      setLoudnessData(prev => ({
+        ...prev,
+        shortTerm: newShortTerm,
+        momentary: newMomentary,
+        integrated: newIntegrated,
+        truePeak: newTruePeak,
+        history: newHistory
+      }));
+    }
+    
+    // Continue animation loop
+    requestAnimationRef.current = requestAnimationFrame(updateVisualizations);
+  };
+  
+  // Initialize and cleanup animation loop
+  useEffect(() => {
+    // Start animation loop
+    requestAnimationRef.current = requestAnimationFrame(updateVisualizations);
+    
+    // Cleanup function
+    return () => {
+      if (requestAnimationRef.current) {
+        cancelAnimationFrame(requestAnimationRef.current);
+      }
+    };
+  }, [
+    limiterEnabled,
+    lookAheadSettings,
+    multibandSettings,
+    truePeakSettings,
+    loudnessSettings,
+    latencySettings,
+    bypassSettings,
+    loudnessData,
+    isPlaying,
+    activeTab
+  ]);
+  
+  // Resize canvas to match display size
+  useEffect(() => {
+    const canvases = [
+      gainReductionCanvasRef.current,
+      loudnessCanvasRef.current,
+      spectrumCanvasRef.current
+    ];
+    
+    canvases.forEach(canvas => {
+      if (canvas) {
+        canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+        canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+        
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+      }
+    });
+  }, [activeTab]);
+  
+  return (
+    <Card className="bg-gray-900 border-gray-800">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg text-amber-500 flex items-center justify-between">
+          <div className="flex items-center">
+            <Shield className="h-5 w-5 mr-2" />
+            Professional Limiter
+          </div>
+          <div className="flex items-center space-x-3">
+            {/* A-B Comparison button */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={bypassSettings.enableABComparison ? "default" : "outline"}
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={toggleABComparison}
+                  >
+                    <Shuffle className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>A/B Comparison</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            {/* Bypass button */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={bypassSettings.bypass ? "destructive" : "outline"}
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={toggleBypass}
+                  >
+                    <EyeOff className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{bypassSettings.bypass ? "Limiter Bypassed" : "Bypass Limiter"}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            {/* Master on/off switch */}
+            <Switch 
+              checked={limiterEnabled}
+              onCheckedChange={setLimiterEnabled}
+            />
+          </div>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className={`${!limiterEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
+        {/* Gain reduction meter and visualization area */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-sm font-medium text-gray-400">Gain Reduction</div>
+            <div className="flex items-center space-x-2">
+              <Button 
+                variant="ghost" 
+                size="icon"
+                className="h-6 w-6"
+                onClick={togglePlayback}
+              >
+                {isPlaying ? (
+                  <X className="h-4 w-4 text-red-500" />
+                ) : (
+                  <Check className="h-4 w-4 text-green-500" />
+                )}
+              </Button>
+            </div>
+          </div>
+          <div className="bg-gray-950 border border-gray-800 rounded-md p-3">
+            <canvas 
+              ref={gainReductionCanvasRef} 
+              className="w-full h-40" 
+              style={{ display: 'block' }}
+            />
+          </div>
+        </div>
+        
+        {/* Loudness and Spectrum visualization */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="bg-gray-950 border border-gray-800 rounded-md p-3">
+            <div className="text-sm font-medium text-gray-400 mb-2">Loudness Meter (LUFS)</div>
+            <canvas 
+              ref={loudnessCanvasRef} 
+              className="w-full h-60" 
+              style={{ display: 'block' }}
+            />
+            
+            {/* Current Loudness Values */}
+            <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
+              <div className="bg-gray-900 p-2 rounded border border-gray-800">
+                <div className="text-gray-400">Integrated</div>
+                <div className={`text-lg font-medium ${
+                  loudnessData.integrated > loudnessSettings.targetLUFS + 1 ? 'text-red-400' :
+                  loudnessData.integrated < loudnessSettings.targetLUFS - 1 ? 'text-blue-400' :
+                  'text-green-400'
+                }`}>
+                  {loudnessData.integrated.toFixed(1)} LUFS
+                </div>
+              </div>
+              <div className="bg-gray-900 p-2 rounded border border-gray-800">
+                <div className="text-gray-400">True Peak</div>
+                <div className={`text-lg font-medium ${
+                  loudnessData.truePeak > loudnessSettings.maxTruePeak ? 'text-red-400' : 'text-green-400'
+                }`}>
+                  {loudnessData.truePeak.toFixed(1)} dB
+                </div>
+              </div>
+              <div className="bg-gray-900 p-2 rounded border border-gray-800">
+                <div className="text-gray-400">LRA</div>
+                <div className={`text-lg font-medium ${
+                  loudnessSettings.lra && loudnessData.loudnessRange > loudnessSettings.lra ? 'text-red-400' : 'text-yellow-400'
+                }`}>
+                  {loudnessData.loudnessRange.toFixed(1)} LU
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-gray-950 border border-gray-800 rounded-md p-3">
+            <div className="text-sm font-medium text-gray-400 mb-2">Frequency Response</div>
+            <canvas 
+              ref={spectrumCanvasRef} 
+              className="w-full h-80" 
+              style={{ display: 'block' }}
+            />
+            
+            {/* Current Processing Status */}
+            <div className="mt-2 flex justify-between items-center">
+              <div>
+                <Badge variant={lookAheadSettings.enabled ? "default" : "outline"} className="mr-1">
+                  Look-Ahead
+                </Badge>
+                <Badge variant={truePeakSettings.enabled ? "secondary" : "outline"} className="mr-1">
+                  True Peak
+                </Badge>
+                <Badge variant={multibandSettings.enabled ? "destructive" : "outline"} className="mr-1">
+                  Multiband
+                </Badge>
+              </div>
+              <div className="text-xs text-gray-400">
+                Latency: {latencySettings.buffer} samples ({(latencySettings.buffer / 48).toFixed(1)} ms)
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Tabs for different limiter controls */}
+        <Tabs defaultValue="lookahead" value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="flex justify-between items-center mb-4">
+            <TabsList className="grid grid-cols-6">
+              <TabsTrigger value="lookahead">
+                <Timer className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">Look-Ahead</span>
+              </TabsTrigger>
+              <TabsTrigger value="multiband">
+                <Layers className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">Multiband</span>
+              </TabsTrigger>
+              <TabsTrigger value="truepeak">
+                <Activity className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">True Peak</span>
+              </TabsTrigger>
+              <TabsTrigger value="loudness">
+                <BarChart className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">Loudness</span>
+              </TabsTrigger>
+              <TabsTrigger value="latency">
+                <Zap className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">Latency</span>
+              </TabsTrigger>
+              <TabsTrigger value="bypass">
+                <Shuffle className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">Bypass</span>
+              </TabsTrigger>
+            </TabsList>
+            
+            <Select defaultValue="preset" onValueChange={loadLimiterPreset}>
+              <SelectTrigger className="w-36">
+                <SelectValue placeholder="Presets" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="preset" disabled>Presets</SelectItem>
+                {LIMITER_PRESETS.map(preset => (
+                  <SelectItem key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {/* Look-Ahead Limiter Tab */}
+          <TabsContent value="lookahead" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <h3 className="text-sm font-medium">Look-Ahead Limiter</h3>
+                <Switch 
+                  className="ml-2"
+                  checked={lookAheadSettings.enabled}
+                  onCheckedChange={(value) => handleLookAheadChange('enabled', value)}
+                />
+              </div>
+              <div className="text-xs text-gray-400">
+                Prevents clipping by analyzing audio before it happens
+              </div>
+            </div>
+            
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="lookahead-threshold">Threshold ({lookAheadSettings.threshold} dB)</Label>
+                  <Slider
+                    id="lookahead-threshold"
+                    min={-24}
+                    max={0}
+                    step={0.1}
+                    value={[lookAheadSettings.threshold]}
+                    onValueChange={(value) => handleLookAheadSliderChange('threshold', value)}
+                    disabled={!lookAheadSettings.enabled}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="lookahead-ceiling">Ceiling ({lookAheadSettings.ceiling} dB)</Label>
+                  <Slider
+                    id="lookahead-ceiling"
+                    min={-12}
+                    max={0}
+                    step={0.1}
+                    value={[lookAheadSettings.ceiling]}
+                    onValueChange={(value) => handleLookAheadSliderChange('ceiling', value)}
+                    disabled={!lookAheadSettings.enabled}
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="lookahead-release">Release ({lookAheadSettings.release} ms)</Label>
+                  <Slider
+                    id="lookahead-release"
+                    min={1}
+                    max={500}
+                    step={1}
+                    value={[lookAheadSettings.release]}
+                    onValueChange={(value) => handleLookAheadSliderChange('release', value)}
+                    disabled={!lookAheadSettings.enabled}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="lookahead-time">Look-Ahead Time ({lookAheadSettings.lookAheadTime} ms)</Label>
+                  <Slider
+                    id="lookahead-time"
+                    min={0.1}
+                    max={10}
+                    step={0.1}
+                    value={[lookAheadSettings.lookAheadTime]}
+                    onValueChange={(value) => handleLookAheadSliderChange('lookAheadTime', value)}
+                    disabled={!lookAheadSettings.enabled}
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="lookahead-attack">Attack ({lookAheadSettings.attack} ms)</Label>
+                  <Slider
+                    id="lookahead-attack"
+                    min={0.01}
+                    max={1}
+                    step={0.01}
+                    value={[lookAheadSettings.attack]}
+                    onValueChange={(value) => handleLookAheadSliderChange('attack', value)}
+                    disabled={!lookAheadSettings.enabled}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="lookahead-knee">Knee ({lookAheadSettings.knee} dB)</Label>
+                  <Slider
+                    id="lookahead-knee"
+                    min={0}
+                    max={12}
+                    step={0.1}
+                    value={[lookAheadSettings.knee]}
+                    onValueChange={(value) => handleLookAheadSliderChange('knee', value)}
+                    disabled={!lookAheadSettings.enabled}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="lookahead-autogain"
+                  checked={lookAheadSettings.autoGain}
+                  onCheckedChange={(value) => handleLookAheadChange('autoGain', value)}
+                  disabled={!lookAheadSettings.enabled}
+                />
+                <Label htmlFor="lookahead-autogain">Automatic Gain Compensation</Label>
+              </div>
+              
+              <div className="text-xs text-gray-400 p-3 bg-gray-950 border border-gray-800 rounded-md">
+                <p className="mb-1">
+                  <strong>Look-Ahead Limiting</strong> prevents clipping by analyzing audio before it is processed,
+                  allowing for cleaner, more transparent limiting with minimal distortion.
+                </p>
+                <p>
+                  Lower <strong>Threshold</strong> values result in more gain reduction. The <strong>Ceiling</strong> sets
+                  the absolute maximum output level. Increase <strong>Look-Ahead Time</strong> for cleaner transient handling.
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+          
+          {/* Multiband Limiter Tab */}
+          <TabsContent value="multiband" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <h3 className="text-sm font-medium">Multiband Limiter</h3>
+                <Switch 
+                  className="ml-2"
+                  checked={multibandSettings.enabled}
+                  onCheckedChange={(value) => handleMultibandChange('enabled', value)}
+                />
+              </div>
+              <div className="text-xs text-gray-400">
+                Independently controls limiting across frequency bands
+              </div>
+            </div>
+            
+            <div className="space-y-5">
+              {/* Global multiband settings */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="multiband-threshold">Global Threshold ({multibandSettings.globalThreshold} dB)</Label>
+                  <Slider
+                    id="multiband-threshold"
+                    min={-24}
+                    max={0}
+                    step={0.1}
+                    value={[multibandSettings.globalThreshold]}
+                    onValueChange={(value) => handleMultibandChange('globalThreshold', value)}
+                    disabled={!multibandSettings.enabled}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="multiband-ceiling">Global Ceiling ({multibandSettings.globalCeiling} dB)</Label>
+                  <Slider
+                    id="multiband-ceiling"
+                    min={-12}
+                    max={0}
+                    step={0.1}
+                    value={[multibandSettings.globalCeiling]}
+                    onValueChange={(value) => handleMultibandChange('globalCeiling', value)}
+                    disabled={!multibandSettings.enabled}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="multiband-link"
+                  checked={multibandSettings.linkBands}
+                  onCheckedChange={(value) => handleMultibandChange('linkBands', value)}
+                  disabled={!multibandSettings.enabled}
+                />
+                <Label htmlFor="multiband-link">Link Bands (global control)</Label>
+              </div>
+              
+              {/* Crossover frequencies */}
+              <div className="p-3 bg-gray-900 border border-gray-800 rounded-md space-y-3">
+                <h4 className="text-sm font-medium">Crossover Frequencies</h4>
+                
+                <div className="grid grid-cols-4 gap-2">
+                  {multibandSettings.crossoverFrequencies.map((freq, index) => (
+                    <div key={index} className="space-y-1">
+                      <Label htmlFor={`crossover-${index}`} className="text-xs">Crossover {index + 1}</Label>
+                      <div className="flex items-center space-x-1">
+                        <Input
+                          id={`crossover-${index}`}
+                          type="number"
+                          min={20}
+                          max={20000}
+                          value={freq}
+                          onChange={(e) => handleCrossoverChange(index, parseInt(e.target.value))}
+                          disabled={!multibandSettings.enabled}
+                          className="text-xs h-7"
+                        />
+                        <span className="text-xs">Hz</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Individual band controls - only enabled when Link Bands is off */}
+              {!multibandSettings.linkBands && (
+                <div className="p-3 bg-gray-900 border border-gray-800 rounded-md space-y-3">
+                  <h4 className="text-sm font-medium">Individual Band Controls</h4>
+                  
+                  {multibandSettings.bands.map((band, index) => (
+                    <div key={index} className="p-2 bg-gray-800 rounded-md space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <Switch
+                            checked={band.enabled}
+                            onCheckedChange={(value) => handleBandChange(index, 'enabled', value)}
+                            disabled={!multibandSettings.enabled}
+                            className="mr-2"
+                          />
+                          <Label className="font-medium">{band.name}</Label>
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {index === 0 ? '20Hz - ' : `${multibandSettings.crossoverFrequencies[index - 1]}Hz - `}
+                          {index === multibandSettings.bands.length - 1 ? '20kHz' : `${multibandSettings.crossoverFrequencies[index]}Hz`}
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <Label htmlFor={`band-${index}-threshold`} className="text-xs">Threshold ({band.threshold} dB)</Label>
+                          <Slider
+                            id={`band-${index}-threshold`}
+                            min={-24}
+                            max={0}
+                            step={0.1}
+                            value={[band.threshold]}
+                            onValueChange={(value) => handleBandChange(index, 'threshold', value[0])}
+                            disabled={!multibandSettings.enabled || !band.enabled}
+                          />
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <Label htmlFor={`band-${index}-release`} className="text-xs">Release ({band.release} ms)</Label>
+                          <Slider
+                            id={`band-${index}-release`}
+                            min={1}
+                            max={500}
+                            step={1}
+                            value={[band.release]}
+                            onValueChange={(value) => handleBandChange(index, 'release', value[0])}
+                            disabled={!multibandSettings.enabled || !band.enabled}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <div className="text-xs text-gray-400 p-3 bg-gray-950 border border-gray-800 rounded-md">
+                <p className="mb-1">
+                  <strong>Multiband Limiting</strong> divides the audio into frequency bands for independent
+                  limiting of each range, preventing pumping and allowing for more transparent limiting.
+                </p>
+                <p>
+                  Useful for material with complex frequency content, like full mixes or broadcasts with music and speech.
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+          
+          {/* True Peak Limiter Tab */}
+          <TabsContent value="truepeak" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <h3 className="text-sm font-medium">True Peak Limiter</h3>
+                <Switch 
+                  className="ml-2"
+                  checked={truePeakSettings.enabled}
+                  onCheckedChange={(value) => handleTruePeakChange('enabled', value)}
+                />
+              </div>
+              <div className="text-xs text-gray-400">
+                Limits inter-sample peaks for broadcast compliance
+              </div>
+            </div>
+            
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="truepeak-threshold">Threshold ({truePeakSettings.threshold} dB)</Label>
+                  <Slider
+                    id="truepeak-threshold"
+                    min={-24}
+                    max={0}
+                    step={0.1}
+                    value={[truePeakSettings.threshold]}
+                    onValueChange={(value) => handleTruePeakSliderChange('threshold', value)}
+                    disabled={!truePeakSettings.enabled}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="truepeak-ceiling">Ceiling ({truePeakSettings.ceiling} dB)</Label>
+                  <Slider
+                    id="truepeak-ceiling"
+                    min={-12}
+                    max={0}
+                    step={0.1}
+                    value={[truePeakSettings.ceiling]}
+                    onValueChange={(value) => handleTruePeakSliderChange('ceiling', value)}
+                    disabled={!truePeakSettings.enabled}
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="truepeak-release">Release ({truePeakSettings.release} ms)</Label>
+                  <Slider
+                    id="truepeak-release"
+                    min={1}
+                    max={500}
+                    step={1}
+                    value={[truePeakSettings.release]}
+                    onValueChange={(value) => handleTruePeakSliderChange('release', value)}
+                    disabled={!truePeakSettings.enabled}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="truepeak-oversample" className="text-sm">Oversampling</Label>
+                  <Select 
+                    value={truePeakSettings.oversample}
+                    onValueChange={(value) => handleTruePeakChange('oversample', value)}
+                    disabled={!truePeakSettings.enabled}
+                  >
+                    <SelectTrigger id="truepeak-oversample">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1x">1x (No oversampling)</SelectItem>
+                      <SelectItem value="2x">2x</SelectItem>
+                      <SelectItem value="4x">4x (Recommended)</SelectItem>
+                      <SelectItem value="8x">8x (Highest quality)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="truepeak-isp"
+                    checked={truePeakSettings.isp}
+                    onCheckedChange={(value) => handleTruePeakChange('isp', value)}
+                    disabled={!truePeakSettings.enabled}
+                  />
+                  <Label htmlFor="truepeak-isp">Inter-Sample Peak Detection</Label>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="truepeak-dither"
+                    checked={truePeakSettings.dither}
+                    onCheckedChange={(value) => handleTruePeakChange('dither', value)}
+                    disabled={!truePeakSettings.enabled}
+                  />
+                  <Label htmlFor="truepeak-dither">Apply Dither</Label>
+                </div>
+              </div>
+              
+              <div className="p-3 bg-gray-900 border border-gray-800 rounded-md">
+                <h4 className="text-sm font-medium mb-2">Broadcast Standard Compliance</h4>
+                
+                <div className="grid grid-cols-3 gap-2">
+                  {Object.entries(COMPLIANCE_STANDARDS).map(([key, standard]) => (
+                    <div 
+                      key={key} 
+                      className={`p-2 border rounded-md text-center cursor-pointer transition-colors ${
+                        loudnessSettings.standard === key 
+                          ? 'border-amber-500 bg-amber-950/30' 
+                          : 'border-gray-700 hover:border-gray-600'
+                      }`}
+                      onClick={() => {
+                        handleLoudnessChange('standard', key);
+                        handleTruePeakChange('threshold', standard.maxTruePeak - 0.1);
+                        handleTruePeakChange('ceiling', standard.maxTruePeak);
+                      }}
+                    >
+                      <div className="flex flex-col items-center">
+                        <standard.icon className="h-4 w-4 mb-1" />
+                        <div className="text-xs font-medium">{standard.name}</div>
+                        <div className="text-xs text-gray-400">{standard.maxTruePeak} dBTP</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="text-xs text-gray-400 p-3 bg-gray-950 border border-gray-800 rounded-md">
+                <p className="mb-1">
+                  <strong>True Peak Limiting</strong> prevents inter-sample peaks that can occur when digital
+                  audio is converted to analog or compressed to lossy formats.
+                </p>
+                <p>
+                  Essential for broadcast compliance with standards like EBU R128 and ATSC A/85.
+                  Higher oversampling rates provide more accurate peak detection but use more CPU.
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+          
+          {/* Loudness Compliance Tab */}
+          <TabsContent value="loudness" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <h3 className="text-sm font-medium">Loudness Compliance</h3>
+                <Switch 
+                  className="ml-2"
+                  checked={loudnessSettings.enabled}
+                  onCheckedChange={(value) => handleLoudnessChange('enabled', value)}
+                />
+              </div>
+              <div className="text-xs text-gray-400">
+                Ensures compliance with broadcast loudness standards
+              </div>
+            </div>
+            
+            <div className="space-y-5">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">Loudness Standard</Label>
+                <Select 
+                  value={loudnessSettings.standard}
+                  onValueChange={(value) => handleLoudnessChange('standard', value)}
+                  disabled={!loudnessSettings.enabled}
+                >
+                  <SelectTrigger className="w-48">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ebu">EBU R128 (Europe)</SelectItem>
+                    <SelectItem value="atsc">ATSC A/85 (North America)</SelectItem>
+                    <SelectItem value="arib">ARIB TR-B32 (Japan)</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="loudness-target">Target LUFS ({loudnessSettings.targetLUFS})</Label>
+                  <Slider
+                    id="loudness-target"
+                    min={-36}
+                    max={-9}
+                    step={0.5}
+                    value={[loudnessSettings.targetLUFS]}
+                    onValueChange={(value) => handleLoudnessSliderChange('targetLUFS', value)}
+                    disabled={!loudnessSettings.enabled || loudnessSettings.standard !== 'custom'}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="loudness-peak">Max True Peak ({loudnessSettings.maxTruePeak} dB)</Label>
+                  <Slider
+                    id="loudness-peak"
+                    min={-12}
+                    max={0}
+                    step={0.1}
+                    value={[loudnessSettings.maxTruePeak]}
+                    onValueChange={(value) => handleLoudnessSliderChange('maxTruePeak', value)}
+                    disabled={!loudnessSettings.enabled || loudnessSettings.standard !== 'custom'}
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="loudness-short">Short-Term Max ({loudnessSettings.shortTermMax} LUFS)</Label>
+                  <Slider
+                    id="loudness-short"
+                    min={-36}
+                    max={-9}
+                    step={0.5}
+                    value={[loudnessSettings.shortTermMax]}
+                    onValueChange={(value) => handleLoudnessSliderChange('shortTermMax', value)}
+                    disabled={!loudnessSettings.enabled || loudnessSettings.standard !== 'custom'}
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="loudness-momentary">Momentary Max ({loudnessSettings.momentaryMax} LUFS)</Label>
+                  <Slider
+                    id="loudness-momentary"
+                    min={-36}
+                    max={-9}
+                    step={0.5}
+                    value={[loudnessSettings.momentaryMax]}
+                    onValueChange={(value) => handleLoudnessSliderChange('momentaryMax', value)}
+                    disabled={!loudnessSettings.enabled || loudnessSettings.standard !== 'custom'}
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="loudness-lra">Loudness Range Target ({loudnessSettings.lra} LU)</Label>
+                <Slider
+                  id="loudness-lra"
+                  min={1}
+                  max={30}
+                  step={1}
+                  value={[loudnessSettings.lra]}
+                  onValueChange={(value) => handleLoudnessSliderChange('lra', value)}
+                  disabled={!loudnessSettings.enabled || loudnessSettings.standard !== 'custom'}
+                />
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="loudness-autogain"
+                    checked={loudnessSettings.autoGain}
+                    onCheckedChange={(value) => handleLoudnessChange('autoGain', value)}
+                    disabled={!loudnessSettings.enabled}
+                  />
+                  <Label htmlFor="loudness-autogain">Auto Gain Correction</Label>
+                </div>
+                
+                <div className="space-x-2">
+                  <Label htmlFor="loudness-correction" className="text-sm">Correction Mode</Label>
+                  <Select 
+                    value={loudnessSettings.correction}
+                    onValueChange={(value) => handleLoudnessChange('correction', value)}
+                    disabled={!loudnessSettings.enabled || !loudnessSettings.autoGain}
+                  >
+                    <SelectTrigger className="w-36" id="loudness-correction">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="live">Live (Continuous)</SelectItem>
+                      <SelectItem value="single-pass">Single Pass</SelectItem>
+                      <SelectItem value="two-pass">Two Pass (File Only)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <div className="text-xs text-gray-400 p-3 bg-gray-950 border border-gray-800 rounded-md">
+                <p className="mb-1">
+                  <strong>Loudness Compliance</strong> ensures your audio meets the requirements for 
+                  broadcast or streaming services based on integrated loudness (LUFS), true peak,
+                  and loudness range (LRA).
+                </p>
+                <p>
+                  <span className="text-amber-400">EBU R128</span> (-23 LUFS, -1 dBTP) for European broadcast,
+                  <span className="text-amber-400"> ATSC A/85</span> (-24 LUFS, -2 dBTP) for North American broadcast,
+                  and <span className="text-amber-400">Custom</span> for streaming platforms that often use -14 to -16 LUFS.
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+          
+          {/* Latency Mode Tab */}
+          <TabsContent value="latency" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium">Latency Settings</h3>
+              <div className="text-xs text-gray-400">
+                Configure processing buffer size and quality
+              </div>
+            </div>
+            
+            <div className="space-y-5">
+              <div className="flex justify-between items-center">
+                <Label htmlFor="latency-mode" className="text-sm">Latency Mode</Label>
+                <Select 
+                  value={latencySettings.mode}
+                  onValueChange={(value) => handleLatencyChange('mode', value)}
+                >
+                  <SelectTrigger className="w-48" id="latency-mode">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="zero">Zero Latency (128 samples)</SelectItem>
+                    <SelectItem value="low">Low Latency (256 samples)</SelectItem>
+                    <SelectItem value="normal">Normal (1024 samples)</SelectItem>
+                    <SelectItem value="high">High Quality (4096 samples)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="p-3 bg-gray-900 border border-gray-800 rounded-md">
+                <div className="flex justify-between items-center mb-3">
+                  <div>
+                    <h4 className="text-sm font-medium">Buffer Size</h4>
+                    <p className="text-xs text-gray-400">Affects processing delay and CPU usage</p>
+                  </div>
+                  <Badge>
+                    {latencySettings.buffer} samples ({(latencySettings.buffer / 48).toFixed(1)} ms @ 48kHz)
+                  </Badge>
+                </div>
+                
+                <Progress value={(latencySettings.buffer / 4096) * 100} className="h-2" />
+                
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>Lower Latency</span>
+                  <span>Better Quality</span>
+                </div>
+              </div>
+              
+              <div className="flex justify-between items-center">
+                <Label htmlFor="latency-quality" className="text-sm">Processing Quality</Label>
+                <Select 
+                  value={latencySettings.quality}
+                  onValueChange={(value) => handleLatencyChange('quality', value)}
+                >
+                  <SelectTrigger className="w-48" id="latency-quality">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="draft">Draft (Lowest CPU)</SelectItem>
+                    <SelectItem value="good">Good (Balanced)</SelectItem>
+                    <SelectItem value="best">Best (Highest CPU)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="latency-priority"
+                  checked={latencySettings.prioritizeLatency}
+                  onCheckedChange={(value) => handleLatencyChange('prioritizeLatency', value)}
+                />
+                <Label htmlFor="latency-priority">Prioritize Latency Over Quality</Label>
+              </div>
+              
+              <div className="text-xs text-gray-400 p-3 bg-gray-950 border border-gray-800 rounded-md">
+                <p className="mb-1">
+                  <strong>Latency Settings</strong> control the balance between processing delay, 
+                  audio quality, and CPU usage.
+                </p>
+                <p>
+                  For <span className="text-green-400">live broadcasting</span>, choose "Zero" or "Low" latency modes.
+                  For <span className="text-green-400">mastering and production</span>, "Normal" or "High" quality modes offer better results.
+                  Smaller buffer sizes reduce latency but may increase CPU load and artifacts.
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+          
+          {/* Bypass / A-B Comparison Tab */}
+          <TabsContent value="bypass" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium">Bypass & A/B Comparison</h3>
+              <div className="text-xs text-gray-400">
+                Compare processed and unprocessed audio
+              </div>
+            </div>
+            
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-8">
+                <div className="bg-gray-900 p-4 border border-gray-800 rounded-md flex flex-col items-center">
+                  <Button
+                    variant={bypassSettings.bypass ? "destructive" : "outline"}
+                    size="lg"
+                    onClick={toggleBypass}
+                    className="w-full mb-3"
+                  >
+                    <EyeOff className="h-5 w-5 mr-2" />
+                    {bypassSettings.bypass ? "Limiter Bypassed" : "Bypass Limiter"}
+                  </Button>
+                  
+                  <p className="text-xs text-gray-400 text-center">
+                    Completely bypasses all limiter processing and outputs the original signal
+                  </p>
+                </div>
+                
+                <div className="bg-gray-900 p-4 border border-gray-800 rounded-md flex flex-col items-center">
+                  <Button
+                    variant={bypassSettings.enableABComparison ? "default" : "outline"}
+                    size="lg"
+                    onClick={toggleABComparison}
+                    className="w-full mb-3"
+                  >
+                    <Shuffle className="h-5 w-5 mr-2" />
+                    {bypassSettings.enableABComparison ? "A/B Enabled" : "Enable A/B Comparison"}
+                  </Button>
+                  
+                  <p className="text-xs text-gray-400 text-center">
+                    Toggles between two audio sources for comparison
+                  </p>
+                </div>
+              </div>
+              
+              {bypassSettings.enableABComparison && (
+                <div className="p-4 bg-gray-900 border border-gray-800 rounded-md space-y-4">
+                  <h4 className="text-sm font-medium">A/B Comparison Settings</h4>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="ab-source-a">Source A</Label>
+                      <Select 
+                        value={bypassSettings.abSourceA}
+                        onValueChange={(value) => handleBypassChange('abSourceA', value)}
+                      >
+                        <SelectTrigger id="ab-source-a">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="processed">Processed</SelectItem>
+                          <SelectItem value="input">Input (Unprocessed)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="ab-source-b">Source B</Label>
+                      <Select 
+                        value={bypassSettings.abSourceB}
+                        onValueChange={(value) => handleBypassChange('abSourceB', value)}
+                      >
+                        <SelectTrigger id="ab-source-b">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="processed">Processed</SelectItem>
+                          <SelectItem value="input">Input (Unprocessed)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="ab-match"
+                      checked={bypassSettings.matchLevels}
+                      onCheckedChange={(value) => handleBypassChange('matchLevels', value)}
+                    />
+                    <Label htmlFor="ab-match">Match Perceived Loudness Levels</Label>
+                  </div>
+                  
+                  <div className="flex gap-4 justify-center mt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={bypassSettings.abSourceA === bypassSettings.abSourceB ? 'opacity-50' : ''}
+                    >
+                      Switch A/B
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                    >
+                      Blind Mode
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              <div className="text-xs text-gray-400 p-3 bg-gray-950 border border-gray-800 rounded-md">
+                <p className="mb-1">
+                  <strong>Bypass and A/B Comparison</strong> tools help you evaluate the impact of 
+                  your limiting and processing settings by allowing direct comparison.
+                </p>
+                <p>
+                  Use <strong>Bypass</strong> to quickly disable all processing. Enable <strong>A/B Comparison</strong> for 
+                  more detailed comparison between processed and unprocessed signals, or between different presets.
+                  <strong>Match Levels</strong> ensures fair comparison by equalizing the perceived loudness between sources.
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
+        
+        {/* Control buttons at the bottom */}
+        <div className="flex justify-between mt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-gray-400"
+            onClick={resetSettings}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Reset All
+          </Button>
+          
+          <Button
+            variant="default"
+            size="sm"
+            onClick={onSave}
+          >
+            <Save className="h-4 w-4 mr-2" />
+            Save Settings
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default LimiterSection;

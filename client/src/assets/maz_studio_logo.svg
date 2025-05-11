@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="70" viewBox="0 0 200 70" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Simplified representation of Maz Studio logo -->
+  <path d="M20 15 L40 15 L50 40 L60 15 L80 15 L60 55 L40 55 Z" fill="#3B82F6"/>
+  <path d="M90 15 L110 15 L120 35 L130 15 L150 15 L130 55 L110 55 Z" fill="#2563EB"/>
+  <path d="M160 15 H180 V25 H170 V30 H180 V40 H170 V55 H160 Z" fill="#1D4ED8"/>
+  <rect x="10" y="15" width="180" height="3" fill="#3B82F6" rx="1.5"/>
+  <rect x="10" y="53" width="180" height="3" fill="#1D4ED8" rx="1.5"/>
+  <text x="10" y="65" font-family="Arial, sans-serif" font-size="10" fill="#3B82F6">MAZ STUDIO</text>
+</svg>

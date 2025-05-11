@@ -1,0 +1,248 @@
+            {/* Channel 1 */}
+            <div className="flex flex-col items-center gap-3 bg-zinc-900 rounded-lg p-3 border border-red-900/20 shadow-inner shadow-red-900/10">
+              <div className="text-sm font-semibold text-red-200">Channel 1 (Mic)</div>
+              
+              {/* Dynamics Processing Buttons - Channel 1 */}
+              <div className="flex justify-center items-center gap-3 mb-3 w-full bg-gray-800 p-2 rounded-md">
+                {/* Compressor */}
+                <Button 
+                  variant="outline" 
+                  className={`h-10 w-10 ${
+                    dynamicsConfig.find(p => p.id === 'compressor')?.active 
+                      ? 'bg-green-600 hover:bg-green-700 text-white' 
+                      : 'bg-gray-700 hover:bg-gray-600 text-white/90'
+                  } border border-gray-600 shadow-sm`}
+                  title="Compressor"
+                  onClick={() => openDynamicsDialog('compressor')}
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 3h18v18H3V3zm4 4v10h10V7H7z" opacity="0.5" />
+                    <path d="M7 12h10v5H7v-5z" />
+                  </svg>
+                </Button>
+                
+                {/* Limiter */}
+                <Button 
+                  variant="outline" 
+                  className={`h-10 w-10 ${
+                    dynamicsConfig.find(p => p.id === 'limiter')?.active 
+                      ? 'bg-green-600 hover:bg-green-700 text-white' 
+                      : 'bg-gray-700 hover:bg-gray-600 text-white/90'
+                  } border border-gray-600 shadow-sm`}
+                  title="Limiter"
+                  onClick={() => openDynamicsDialog('limiter')}
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 3h18v18H3V3zm4 4v10h10V7H7z" opacity="0.5" />
+                    <path d="M7 16h10v1H7v-1z" />
+                  </svg>
+                </Button>
+                
+                {/* EQ */}
+                <Button 
+                  variant="outline" 
+                  className={`h-10 w-10 ${
+                    dynamicsConfig.find(p => p.id === 'eq')?.active 
+                      ? 'bg-green-600 hover:bg-green-700 text-white' 
+                      : 'bg-gray-700 hover:bg-gray-600 text-white/90'
+                  } border border-gray-600 shadow-sm`}
+                  title="Equalizer"
+                  onClick={() => openDynamicsDialog('eq')}
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 19h16v2H4zM4 3h16v2H4z" />
+                    <path d="M7 7h2v8H7zm4 2h2v6h-2zm4-1h2v7h-2z" />
+                  </svg>
+                </Button>
+                
+                {/* DeEsser */}
+                <Button 
+                  variant="outline" 
+                  className={`h-10 w-10 ${
+                    dynamicsConfig.find(p => p.id === 'deesser')?.active 
+                      ? 'bg-green-600 hover:bg-green-700 text-white' 
+                      : 'bg-gray-700 hover:bg-gray-600 text-white/90'
+                  } border border-gray-600 shadow-sm`}
+                  title="De-Esser"
+                  onClick={() => openDynamicsDialog('deesser')}
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M15 8H5v2h10zm0 4H5v2h10z" />
+                    <path d="M5 16h10v2H5z" opacity="0.5" />
+                    <path d="M19 6l-2 12h-2l2-12z" />
+                  </svg>
+                </Button>
+                
+                {/* Noise Gate */}
+                <Button 
+                  variant="outline" 
+                  className={`h-10 w-10 ${
+                    dynamicsConfig.find(p => p.id === 'gate')?.active 
+                      ? 'bg-green-600 hover:bg-green-700 text-white' 
+                      : 'bg-gray-700 hover:bg-gray-600 text-white/90'
+                  } border border-gray-600 shadow-sm`}
+                  title="Noise Gate"
+                  onClick={() => openDynamicsDialog('gate')}
+                >
+                  <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M4 4h16v16H4z" opacity="0.2" />
+                    <path d="M8 4v6h8V4h2v16h-2v-6H8v6H6V4z" />
+                  </svg>
+                </Button>
+              </div>
+              
+              {/* Level meters, controls and fader side by side */}
+              <div className="flex gap-4 h-[10rem]">
+                {/* Left and right meters with control buttons now on the left */}
+                <div className="flex">
+                  {/* Buttons moved to the left of the meters */}
+                  <div className="flex flex-col mr-3 h-full justify-center gap-3">
+                    <Button
+                      size="sm"
+                      onClick={toggleMicrophone}
+                      className={`w-14 h-10 rounded-md ${micActive ? 'bg-red-600 hover:bg-red-700' : 'bg-zinc-800 hover:bg-zinc-700'}`}
+                      disabled={connectionStatus !== 'connected'}
+                    >
+                      {micActive ? <Mic className="h-5 w-5 mr-1" /> : <MicOff className="h-5 w-5 mr-1" />}
+                      {micActive ? <span className="text-xs">ON</span> : <span className="text-xs">OFF</span>}
+                    </Button>
+                    
+                    <Button
+                      size="sm" 
+                      variant="outline"
+                      className="w-14 h-10 rounded-md border-zinc-700"
+                      disabled={connectionStatus !== 'connected'}
+                    >
+                      <Headphones className="h-5 w-5" />
+                    </Button>
+                  </div>
+                  
+                  {/* Audio level meters */}
+                  <div className="flex gap-1">
+                    {/* Left channel level */}
+                    <div className="relative flex flex-col-reverse w-6 h-[calc(100%+40px)] bg-zinc-800 rounded-sm overflow-hidden">
+                      <div 
+                        className="w-full bg-gradient-to-t from-red-700 via-red-600 to-red-500 transition-all duration-100" 
+                        style={{ height: `${micActive ? (externalAudioLevels ? externalAudioLevels.left : internalAudioLevels.left) : 0}%` }}
+                      />
+                      {/* Level markers */}
+                      <div className="absolute right-0 top-0 h-[calc(100%+40px)] w-full flex flex-col justify-between pointer-events-none">
+                        <div className="w-full border-t border-red-500/50 h-0"></div>
+                        <div className="w-2/3 self-end border-t border-red-500/30 h-0"></div>
+                        <div className="w-full border-t border-yellow-500/50 h-0"></div>
+                        <div className="w-2/3 self-end border-t border-yellow-500/30 h-0"></div>
+                        <div className="w-full border-t border-green-500/50 h-0"></div>
+                        <div className="w-2/3 self-end border-t border-green-500/30 h-0"></div>
+                        <div className="w-full border-t border-green-500/50 h-0"></div>
+                      </div>
+                    </div>
+                    
+                    {/* Right channel level */}
+                    <div className="relative flex flex-col-reverse w-6 h-[calc(100%+40px)] bg-zinc-800 rounded-sm overflow-hidden">
+                      <div 
+                        className="w-full bg-gradient-to-t from-red-700 via-red-600 to-red-500 transition-all duration-100"
+                        style={{ height: `${micActive ? (externalAudioLevels ? externalAudioLevels.right : internalAudioLevels.right) : 0}%` }}
+                      />
+                      {/* Level markers */}
+                      <div className="absolute left-0 top-0 h-[calc(100%+40px)] w-full flex flex-col justify-between pointer-events-none">
+                        <div className="w-full border-t border-red-500/50 h-0"></div>
+                        <div className="w-2/3 border-t border-red-500/30 h-0"></div>
+                        <div className="w-full border-t border-yellow-500/50 h-0"></div>
+                        <div className="w-2/3 border-t border-yellow-500/30 h-0"></div>
+                        <div className="w-full border-t border-green-500/50 h-0"></div>
+                        <div className="w-2/3 border-t border-green-500/30 h-0"></div>
+                        <div className="w-full border-t border-green-500/50 h-0"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* New simplified professional fader design */}
+                <div className="flex flex-col items-center ml-2 w-[4.5rem]">
+                  <div className="relative w-full h-[calc(100%+40px)]">
+                    {/* Fader track background with level markings */}
+                    <div className="absolute inset-0 w-full h-full bg-black rounded-sm border border-zinc-700">
+                      {/* Level markers */}
+                      <div className="absolute right-0 w-full h-full flex flex-col justify-between py-1 px-1">
+                        {/* +12 dB (top, red zone) */}
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] text-red-400 font-medium">+12</span>
+                          <div className="w-3 h-[1px] bg-red-500"></div>
+                        </div>
+                        {/* +6 dB */}
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] text-red-400 font-medium">+6</span>
+                          <div className="w-2 h-[1px] bg-red-500"></div>
+                        </div>
+                        {/* +3 dB */}
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] text-yellow-400 font-medium">+3</span>
+                          <div className="w-3 h-[1px] bg-yellow-500"></div>
+                        </div>
+                        {/* 0 dB (nominal level) */}
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] text-green-400 font-medium">0</span>
+                          <div className="w-4 h-[1px] bg-green-500"></div>
+                        </div>
+                        {/* -5 dB */}
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] text-green-400 font-medium">-5</span>
+                          <div className="w-2 h-[1px] bg-green-500"></div>
+                        </div>
+                        {/* -10 dB */}
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] text-green-400 font-medium">-10</span>
+                          <div className="w-3 h-[1px] bg-green-500"></div>
+                        </div>
+                        {/* -20 dB */}
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] text-green-400 font-medium">-20</span>
+                          <div className="w-3 h-[1px] bg-green-500"></div>
+                        </div>
+                        {/* -40 dB */}
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] text-gray-400 font-medium">-40</span>
+                          <div className="w-2 h-[1px] bg-gray-500"></div>
+                        </div>
+                        {/* -∞ dB (bottom) */}
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] text-gray-400 font-medium">-∞</span>
+                          <div className="w-4 h-[1px] bg-gray-500"></div>
+                        </div>
+                      </div>
+                      
+                      {/* Fader track - vertical strip in center */}
+                      <div className="absolute left-1/2 top-0 bottom-0 w-1 -ml-[0.5px] bg-zinc-800"></div>
+                    </div>
+                    
+                    {/* Level indicator colored LED strip */}
+                    <div
+                      className="absolute left-1/2 bottom-0 w-2 -ml-1 bg-gradient-to-t from-green-600 via-yellow-600 to-red-600 transition-all duration-100 rounded-t-sm"
+                      style={{ height: `${connectionStatus === 'connected' ? 75 : 0}%` }}
+                    ></div>
+                    
+                    {/* Fader slider component */}
+                    <div className="absolute inset-0 h-full">
+                      <Slider
+                        defaultValue={[75]}
+                        max={100}
+                        step={1}
+                        orientation="vertical"
+                        className="h-full w-full"
+                        disabled={connectionStatus !== 'connected'}
+                        trackClassName="data-[orientation=vertical]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:bg-transparent"
+                        thumbClassName="flex items-center justify-center h-6 w-20 -translate-x-[26px] bg-gradient-to-b from-red-700 to-red-800 border-t border-l border-r border-b-2 border-red-950 shadow-md rounded-sm cursor-grab active:cursor-grabbing"
+                      />
+                      
+                      {/* Fader handle markings */}
+                      <div className="absolute pointer-events-none z-10 left-1/2 top-[75%] w-16 h-4 flex items-center justify-center -translate-x-1/2 -translate-y-1/2">
+                        <div className="w-10 h-[2px] bg-red-500"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="text-xs text-zinc-400">L&nbsp;&nbsp;&nbsp;R</div>
+            </div>
+            

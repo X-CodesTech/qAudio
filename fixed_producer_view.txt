@@ -1,0 +1,19 @@
+# Fix for Studio A call lines container (around line 804-810)
+                <div 
+                  className="bg-zinc-800 p-2" 
+                  style={{ 
+                    height: "calc(96vh - 350px)",
+                    transition: "all 0.3s ease",
+                    overflow: "hidden"
+                  }}
+                >
+
+# Fix for Studio B call lines container (around line 863-869)
+                <div 
+                  className="bg-zinc-800 p-2" 
+                  style={{ 
+                    height: "calc(96vh - 350px)",
+                    transition: "all 0.3s ease",
+                    overflow: "hidden"
+                  }}
+                >

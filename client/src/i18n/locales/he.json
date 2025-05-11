@@ -1,0 +1,100 @@
+{
+  "common": {
+    "language": "עברית",
+    "loading": "טוען...",
+    "error": "שגיאה",
+    "save": "שמור",
+    "cancel": "בטל",
+    "ok": "אישור",
+    "yes": "כן",
+    "no": "לא",
+    "confirm": "אשר",
+    "delete": "מחק",
+    "edit": "ערוך",
+    "back": "חזור",
+    "next": "הבא",
+    "search": "חיפוש"
+  },
+  "header": {
+    "producerView": "מפיק",
+    "languageSelector": "שפה",
+    "settings": "הגדרות",
+    "logout": "התנתק"
+  },
+  "studios": {
+    "studioA": "אולפן א",
+    "studioB": "אולפן ב",
+    "buzzTalent": "צלצל לכישרון",
+    "buzzProducer": "צלצל למפיק",
+    "buzzingProducer": "מצלצל למפיק", 
+    "fromProducer": "מהמפיק"
+  },
+  "calls": {
+    "line": "קו",
+    "hold": "החזק",
+    "hangup": "נתק",
+    "onAir": "באוויר",
+    "offAir": "לא באוויר",
+    "dial": "חייג",
+    "caller": "מתקשר",
+    "noCaller": "אין מתקשר",
+    "duration": "משך",
+    "notes": "הערות",
+    "topic": "נושא",
+    "saveNotes": "שמור הערות",
+    "updateInfo": "עדכן מידע",
+    "saveToPhoneBook": "שמור לספר טלפונים",
+    "available": "פנוי",
+    "ringing": "מצלצל",
+    "active": "פעיל",
+    "holding": "מוחזק"
+  },
+  "dialPad": {
+    "dialpad": "לוח חיוג",
+    "call": "שיחה",
+    "dialing": "מחייג...",
+    "phoneNumber": "מספר טלפון",
+    "enterPhoneNumber": "הכנס מספר טלפון"
+  },
+  "chat": {
+    "communication": "תקשורת",
+    "talentChat": "צ'אט כישרון",
+    "talentA": "כישרון א",
+    "talentB": "כישרון ב",
+    "typeMessage": "הקלד הודעה...",
+    "send": "שלח",
+    "clearChat": "נקה צ'אט",
+    "attachment": "קובץ מצורף"
+  },
+  "audioRouting": {
+    "routing": "ניתוב אודיו",
+    "input": "כניסה",
+    "output": "יציאה",
+    "levels": "רמות",
+    "saveRouting": "שמור ניתוב"
+  },
+  "audio": {
+    "inputLevel": "רמת כניסה",
+    "outputLevel": "רמת יציאה",
+    "mute": "השתק",
+    "unmute": "בטל השתקה",
+    "volume": "עוצמת קול"
+  },
+  "sipConfig": {
+    "title": "הגדרות SIP",
+    "server": "שרת SIP",
+    "username": "שם משתמש",
+    "password": "סיסמה",
+    "saveConfig": "שמור הגדרות",
+    "testConnection": "בדוק חיבור",
+    "connectionSuccess": "החיבור הצליח",
+    "connectionFailed": "החיבור נכשל"
+  },
+  "networkConfig": {
+    "title": "הגדרות רשת",
+    "interface": "ממשק רשת",
+    "ipAddress": "כתובת IP",
+    "detectInterfaces": "זהה ממשקים",
+    "saveInterface": "שמור ממשק"
+  }
+}

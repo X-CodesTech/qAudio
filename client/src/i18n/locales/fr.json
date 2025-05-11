@@ -1,0 +1,87 @@
+{
+  "common": {
+    "language": "Français",
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "ok": "OK",
+    "yes": "Oui",
+    "no": "Non",
+    "confirm": "Confirmer",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "back": "Retour",
+    "next": "Suivant",
+    "search": "Rechercher"
+  },
+  "header": {
+    "producerView": "Producteur",
+    "languageSelector": "Langue",
+    "settings": "Paramètres",
+    "logout": "Déconnexion"
+  },
+  "studios": {
+    "studioA": "STUDIO A",
+    "studioB": "STUDIO B",
+    "buzzTalent": "Alerter Talent",
+    "buzzProducer": "Alerter Producteur",
+    "buzzingProducer": "Alerte au Producteur", 
+    "fromProducer": "Du Producteur"
+  },
+  "calls": {
+    "line": "Ligne",
+    "hold": "Attente",
+    "hangup": "Raccrocher",
+    "onAir": "À l'Antenne",
+    "offAir": "Hors Antenne",
+    "dial": "Composer",
+    "caller": "Appelant",
+    "duration": "Durée",
+    "notes": "Notes",
+    "topic": "Sujet",
+    "saveNotes": "Enregistrer les Notes",
+    "updateInfo": "Mettre à Jour"
+  },
+  "dialPad": {
+    "dialpad": "Clavier",
+    "call": "Appeler",
+    "dialing": "Appel en cours...",
+    "phoneNumber": "Numéro de Téléphone",
+    "enterPhoneNumber": "Entrer un numéro de téléphone"
+  },
+  "chat": {
+    "communication": "Communication",
+    "talentChat": "Conversation Talent",
+    "talentA": "Talent A",
+    "talentB": "Talent B",
+    "typeMessage": "Saisissez un message...",
+    "send": "Envoyer",
+    "clearChat": "Effacer la Conversation",
+    "attachment": "Pièce Jointe"
+  },
+  "audioRouting": {
+    "routing": "Routage Audio",
+    "input": "Entrée",
+    "output": "Sortie",
+    "levels": "Niveaux",
+    "saveRouting": "Enregistrer le Routage"
+  },
+  "sipConfig": {
+    "title": "Configuration SIP",
+    "server": "Serveur SIP",
+    "username": "Nom d'utilisateur",
+    "password": "Mot de passe",
+    "saveConfig": "Enregistrer la Configuration",
+    "testConnection": "Tester la Connexion",
+    "connectionSuccess": "Connexion Réussie",
+    "connectionFailed": "Échec de la Connexion"
+  },
+  "networkConfig": {
+    "title": "Configuration Réseau",
+    "interface": "Interface Réseau",
+    "ipAddress": "Adresse IP",
+    "detectInterfaces": "Détecter les Interfaces",
+    "saveInterface": "Enregistrer l'Interface"
+  }
+}

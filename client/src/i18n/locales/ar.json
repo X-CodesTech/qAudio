@@ -1,0 +1,87 @@
+{
+  "common": {
+    "language": "العربية",
+    "loading": "جاري التحميل...",
+    "error": "خطأ",
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "ok": "موافق",
+    "yes": "نعم",
+    "no": "لا",
+    "confirm": "تأكيد",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "back": "رجوع",
+    "next": "التالي",
+    "search": "بحث"
+  },
+  "header": {
+    "producerView": "منتج",
+    "languageSelector": "اللغة",
+    "settings": "الإعدادات",
+    "logout": "تسجيل الخروج"
+  },
+  "studios": {
+    "studioA": "استوديو أ",
+    "studioB": "استوديو ب",
+    "buzzTalent": "تنبيه المواهب",
+    "buzzProducer": "تنبيه المنتج",
+    "buzzingProducer": "تنبيه المنتج", 
+    "fromProducer": "من المنتج"
+  },
+  "calls": {
+    "line": "خط",
+    "hold": "تعليق",
+    "hangup": "إنهاء المكالمة",
+    "onAir": "على الهواء",
+    "offAir": "خارج الهواء",
+    "dial": "اتصال",
+    "caller": "المتصل",
+    "duration": "المدة",
+    "notes": "ملاحظات",
+    "topic": "الموضوع",
+    "saveNotes": "حفظ الملاحظات",
+    "updateInfo": "تحديث المعلومات"
+  },
+  "dialPad": {
+    "dialpad": "لوحة الاتصال",
+    "call": "اتصال",
+    "dialing": "جاري الاتصال...",
+    "phoneNumber": "رقم الهاتف",
+    "enterPhoneNumber": "أدخل رقم الهاتف"
+  },
+  "chat": {
+    "communication": "التواصل",
+    "talentChat": "دردشة المواهب",
+    "talentA": "موهبة أ",
+    "talentB": "موهبة ب",
+    "typeMessage": "اكتب رسالة...",
+    "send": "إرسال",
+    "clearChat": "مسح الدردشة",
+    "attachment": "مرفق"
+  },
+  "audioRouting": {
+    "routing": "توجيه الصوت",
+    "input": "مدخل",
+    "output": "مخرج",
+    "levels": "مستويات",
+    "saveRouting": "حفظ التوجيه"
+  },
+  "sipConfig": {
+    "title": "إعدادات SIP",
+    "server": "خادم SIP",
+    "username": "اسم المستخدم",
+    "password": "كلمة المرور",
+    "saveConfig": "حفظ الإعدادات",
+    "testConnection": "اختبار الاتصال",
+    "connectionSuccess": "تم الاتصال بنجاح",
+    "connectionFailed": "فشل الاتصال"
+  },
+  "networkConfig": {
+    "title": "إعدادات الشبكة",
+    "interface": "واجهة الشبكة",
+    "ipAddress": "عنوان IP",
+    "detectInterfaces": "اكتشاف الواجهات",
+    "saveInterface": "حفظ الواجهة"
+  }
+}
